@@ -2,7 +2,7 @@
 from torch import nn
 import torch.nn.functional as F
 
-from spectral_normalization import SpectralNorm
+from model.spectral_normalization import SpectralNorm
 import numpy as np
 
 

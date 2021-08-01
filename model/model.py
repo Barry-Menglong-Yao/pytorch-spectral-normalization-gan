@@ -2,7 +2,7 @@
 from torch import nn
 import torch.nn.functional as F
 
-from spectral_normalization import SpectralNorm
+from model.spectral_normalization import SpectralNorm
 
 channels = 3
 leak = 0.1
@@ -12,6 +12,7 @@ class Generator(nn.Module):
     def __init__(self, z_dim):
         super(Generator, self).__init__()
         self.z_dim = z_dim
+        # self.c_dim=c_
 
         self.model = nn.Sequential(
             nn.ConvTranspose2d(z_dim, 512, 4, stride=1),

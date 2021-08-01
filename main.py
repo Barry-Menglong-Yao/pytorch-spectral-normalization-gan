@@ -1,5 +1,5 @@
 import argparse
-from trainer import evaluate, train
+from util.trainer import evaluate, load_model, train, load_data
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,9 +7,9 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 from torchvision import datasets, transforms
 from torch.autograd import Variable
-import model_resnet
-import model
-
+from model import model_resnet 
+from model import  model 
+from util import constants
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -33,34 +33,19 @@ def parse_args():
 
 
 
-def load_data(args):
-    loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('../data/', train=True, download=True,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])),
-            batch_size=args.batch_size, shuffle=True, num_workers=1, pin_memory=True)
-    return loader
 
-def load_model(Z_dim,args):
-    # discriminator = torch.nn.DataParallel(Discriminator()).cuda() # TODO: try out multi-gpu training
-    if args.model == 'resnet':
-        discriminator = model_resnet.Discriminator().cuda()
-        generator = model_resnet.Generator(Z_dim).cuda()
-    else:
-        discriminator = model.Discriminator().cuda()
-        generator = model.Generator(Z_dim).cuda()
-    return generator,discriminator
+
+
 
 
 def main():
     args=parse_args()
     os.makedirs(args.checkpoint_dir, exist_ok=True)
-    Z_dim = 128
+    Z_dim = constants.Z_dim
     #number of updates to discriminator for every update to generator 
     disc_iters = 5
-    loader=load_data(args)
-    generator,discriminator=load_model(Z_dim,args)
+    loader=load_data(args.batch_size)
+    generator,discriminator=load_model(Z_dim,args.model)
     # because the spectral normalization module creates parameters that don't require gradients (u and v), we don't want to 
     # optimize these using sgd. We only let the optimizer operate on parameters that _do_ require gradients
     # TODO: replace Parameters with buffers, which aren't returned from .parameters() method.

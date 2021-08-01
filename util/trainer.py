@@ -6,8 +6,8 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 from torchvision import datasets, transforms
 from torch.autograd import Variable
-import model_resnet
-import model
+from model import model_resnet
+from model import model
 
 import numpy as np
 import matplotlib
@@ -76,3 +76,26 @@ def evaluate(epoch,fixed_z,generator):
 
     plt.savefig('out/{}.png'.format(str(epoch).zfill(3)), bbox_inches='tight')
     plt.close(fig)
+
+def load_dataset():
+    dataset=datasets.CIFAR10('../../data/', train=True, download=False,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]))
+    return dataset
+
+def load_data(batch_size):
+    loader = torch.utils.data.DataLoader(
+        load_dataset(),
+            batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
+    return loader
+
+def load_model(Z_dim,model_type):
+    # discriminator = torch.nn.DataParallel(Discriminator()).cuda() # TODO: try out multi-gpu training
+    if model_type == 'resnet':
+        discriminator = model_resnet.Discriminator().cuda()
+        generator = model_resnet.Generator(Z_dim).cuda()
+    else:
+        discriminator = model.Discriminator().cuda()
+        generator = model.Generator(Z_dim).cuda()
+    return generator,discriminator
