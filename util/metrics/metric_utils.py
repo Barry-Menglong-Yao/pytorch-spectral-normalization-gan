@@ -11,7 +11,7 @@ import time
 import hashlib
 import pickle
 import copy
-from util.trainer import load_dataset
+from util.data import load_dataset
 import uuid
 import numpy as np
 import torch
@@ -185,6 +185,25 @@ def compute_feature_stats_for_dataset(opts, detector_url, detector_kwargs, rel_l
     if data_loader_kwargs is None:
         data_loader_kwargs = dict(pin_memory=True, num_workers=3, prefetch_factor=2)
 
+    #Try to lookup from cache.
+    cache_file = None
+    if opts.cache:
+        # Choose cache file name.
+        args = dict( detector_url=detector_url, detector_kwargs=detector_kwargs, stats_kwargs=stats_kwargs)
+        md5 = hashlib.md5(repr(sorted(args.items())).encode('utf-8'))
+        cache_tag = f'CIFAR10-{get_feature_detector_name(detector_url)}-{md5.hexdigest()}'
+        cache_file = dnnlib.make_cache_dir_path('gan-metrics', cache_tag + '.pkl')
+
+        # Check if the file exists (all processes must agree).
+        flag = os.path.isfile(cache_file) if opts.rank == 0 else False
+        if opts.num_gpus > 1:
+            flag = torch.as_tensor(flag, dtype=torch.float32, device=opts.device)
+            torch.distributed.broadcast(tensor=flag, src=0)
+            flag = (float(flag.cpu()) != 0)
+
+        # Load.
+        if flag:
+            return FeatureStats.load(cache_file)
  
     # Initialize.
     num_items = len(dataset)
@@ -199,11 +218,17 @@ def compute_feature_stats_for_dataset(opts, detector_url, detector_kwargs, rel_l
     for images, _labels in torch.utils.data.DataLoader(dataset=dataset, sampler=item_subset, batch_size=batch_size, **data_loader_kwargs):
         if images.shape[1] == 1:
             images = images.repeat([1, 3, 1, 1])
+        images = (images * 127.5 + 128).clamp(0, 255).to(torch.uint8)
         features = detector(images.to(opts.device), **detector_kwargs)
         stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
         progress.update(stats.num_items)
 
-    
+    # Save to cache.
+    if cache_file is not None and opts.rank == 0:
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        temp_file = cache_file + '.' + uuid.uuid4().hex
+        stats.save(temp_file)
+        os.replace(temp_file, cache_file) # atomic
     return stats
 
 #----------------------------------------------------------------------------
@@ -220,7 +245,7 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
     # Image generation func.
     def run_generator(z, c):
         img = G(z=z,   **opts.G_kwargs)
-        # img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+        img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
         return img
 
     # JIT.
@@ -282,11 +307,12 @@ def compute_feature_stats_for_reconstruct(opts, detector_url, detector_kwargs, r
 
 
 def reconstruct_image(images,opts,  batch_size,dataset=None  ):
-    G = copy.deepcopy(opts.G).eval().requires_grad_(False).to(opts.device)
-    D=copy.deepcopy(opts.D).eval().requires_grad_(False).to(opts.device)
+    # G = copy.deepcopy(opts.G).eval().requires_grad_(False).to(opts.device)
+    # D=copy.deepcopy(opts.D).eval().requires_grad_(False).to(opts.device)
+ 
     real_c=generate_c(opts,dataset,batch_size)
-    reconstructed_img=reconstruct(images ,  G,D,real_c,opts.device,G_kwargs=opts.G_kwargs  )
-
+    reconstructed_img=reconstruct(images , opts.G,opts.D,real_c,opts.device,G_kwargs=opts.G_kwargs  )
+    reconstructed_img = (reconstructed_img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
     return reconstructed_img
 
 
@@ -296,13 +322,14 @@ def reconstruct(images ,   G,D,real_c,device=None, G_kwargs=None   ):
         G_kwargs=   dnnlib.EasyDict()
     if device!=None:
         images=images.to( device)
-    processed_iamges=(images.to(torch.float32) / 127.5 - 1)
-    _,generated_z ,_,_ =  D(processed_iamges , real_c,"encoder" )
-    reconstructed_img = G(z=generated_z, c=real_c, **G_kwargs)
-    reconstructed_img = (reconstructed_img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+ 
+    _,generated_z ,_,_ =  D(images  )
+    reconstructed_img = G(z=generated_z  )
+    
     return reconstructed_img
 
 def generate_c(opts,dataset,batch_size):
-    c = [dataset.get_label(np.random.randint(len(dataset))) for _i in range(batch_size)]
-    c = torch.from_numpy(np.stack(c)).pin_memory().to(opts.device)
+    # c = [dataset.get_label(np.random.randint(len(dataset))) for _i in range(batch_size)]
+    # c = torch.from_numpy(np.stack(c)).pin_memory().to(opts.device)
+    c=torch.zeros([batch_size, 0], device=opts.device)
     return c

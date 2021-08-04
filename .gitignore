@@ -101,6 +101,8 @@ ENV/
 .mypy_cache/
 
 out/
-out*/
-checkpoints
+out/
+training_runs/**
+testing_runs/**
+checkpoints/**
 .vscode/launch.json

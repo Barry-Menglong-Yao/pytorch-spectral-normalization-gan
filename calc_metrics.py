@@ -9,6 +9,7 @@
 """Calculate quality metrics for previous training run or pretrained network pickle."""
 
 import os
+from util.enums import ModelAttribute
 import click
 import json
 import tempfile
@@ -28,7 +29,7 @@ from util.torch_utils import misc
 
 def subprocess_fn(rank, args, temp_dir,generator,discriminator):
     dnnlib.util.Logger(should_flush=True)
-
+    
     # Init torch.distributed.
     if args.num_gpus > 1:
         init_file = os.path.abspath(os.path.join(temp_dir, '.torch_distributed_init'))
@@ -86,13 +87,13 @@ class CommaSeparatedList(click.ParamType):
 @click.pass_context
 @click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH', required=True)
 @click.option('--epoch', help=' epoch', type=int, default=1, metavar='INT' )
-@click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full', show_default=True)
+@click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full,fid50k_full_reconstruct' , show_default=True)
 @click.option('--data', help='Dataset to evaluate metrics against (directory or zip) [default: same as training data]', metavar='PATH')
 
 @click.option('--gpus', help='Number of GPUs to use', type=int, default=1, metavar='INT', show_default=True)
 @click.option('--verbose', help='Print optional information', type=bool, default=True, metavar='BOOL', show_default=True)
-
-def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose):
+@click.option('--model_type', help=' ',default='SNGAN_VAE', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
+def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type):
     """Calculate quality metrics for previous training run or pretrained network pickle.
 
     Examples:
@@ -130,7 +131,7 @@ def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose):
     dnnlib.util.Logger(should_flush=True)
 
     # Validate arguments.
-    args = dnnlib.EasyDict(metrics=metrics, num_gpus=gpus, network_pkl=network_pkl, verbose=verbose)
+    args = dnnlib.EasyDict(metrics=metrics, num_gpus=gpus, network_pkl=network_pkl, verbose=verbose,model_type=model_type)
     if not all(metric_main.is_valid_metric(metric) for metric in args.metrics):
         ctx.fail('\n'.join(['--metrics can only contain the following values:'] + metric_main.list_valid_metrics()))
     if not args.num_gpus >= 1:
@@ -140,13 +141,14 @@ def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose):
     
     if args.verbose:
         print(f'Loading network from "{network_pkl}"...')
-    generator,discriminator=load_model(constants.Z_dim,None)
+    model_attribute=ModelAttribute[args.model_type]
+    generator,discriminator,vae=load_model(constants.Z_dim,None,model_attribute)
     generator.load_state_dict(torch.load(network_pkl+"/gen_"+str(epoch)))
     discriminator.load_state_dict(torch.load(network_pkl+"/disc_"+str(epoch)))
  
     
  
-    args.run_dir ="out/metric"
+    args.run_dir ="testing_runs/metric"
     # Launch processes.
     if args.verbose:
         print('Launching processes...')
