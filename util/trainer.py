@@ -177,7 +177,7 @@ def load_data(batch_size):
     dataset=load_dataset()
     loader = torch.utils.data.DataLoader(
         dataset,
-            batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+            batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
     return loader,dataset
 
 def load_model(Z_dim,model_type,model_attribute):

@@ -240,7 +240,7 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
  
     # Setup generator and load labels.
     G = copy.deepcopy(opts.G).eval().requires_grad_(False).to(opts.device)
-    dataset = load_dataset()
+    # dataset = load_dataset()
 
     # Image generation func.
     def run_generator(z, c):

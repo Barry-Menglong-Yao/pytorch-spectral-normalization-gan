@@ -39,7 +39,7 @@ def parse_args():
 
 def make_running_dir(outdir,model_type,remark,args):
     run_desc=model_type
-    run_desc+=f'-{args.vae_alpha:.1f}-{args.vae_beta:.3f}'
+    run_desc+=f'-{args.vae_alpha:.3f}-{args.vae_beta:.6f}'
     if remark!=None:
         run_desc+="-"+remark
     # Pick output directory.
@@ -78,7 +78,7 @@ def main():
     for epoch in range(2000):
         train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,
         model_attribute,args.batch_size,vae,optim_vae,scheduler_vae,args.vae_alpha,args.vae_beta)
-        if epoch%4==0:
+        if epoch%12==0 :
             evaluate(epoch,fixed_z,generator,run_dir,discriminator,args.metrics,sampled_imgs,model_attribute)
             torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc_{}'.format(epoch)))
             torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen_{}'.format(epoch)))
