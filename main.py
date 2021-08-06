@@ -1,6 +1,7 @@
 import argparse
+from util.image import export_sample_images 
 from util.enums import ModelAttribute
-from util.trainer import evaluate, load_model, load_optim, save_img, train, load_data
+from util.trainer import evaluate, load_model, load_optim,   train, load_data
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -74,29 +75,36 @@ def main():
     optim_gen,optim_disc,optim_vae,scheduler_g,scheduler_d,scheduler_vae=load_optim(args,discriminator,generator,vae,model_attribute)
     
     start_time = time.time()
-    fixed_z, sampled_imgs=sample_img_and_z(args,Z_dim,dataset,run_dir)
+    grid_z, grid_size,real_images=export_sample_images(dataset, run_dir,  torch.device('cuda'), Z_dim,args.batch_size)
+    # fixed_z, sampled_imgs=sample_img_and_z(args,Z_dim,dataset,run_dir)
     for epoch in range(2000):
         train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,
         model_attribute,args.batch_size,vae,optim_vae,scheduler_vae,args.vae_alpha,args.vae_beta)
         if epoch%12==0 :
-            evaluate(epoch,fixed_z,generator,run_dir,discriminator,args.metrics,sampled_imgs,model_attribute)
+            evaluate(epoch,grid_z,generator,run_dir,discriminator,args.metrics,real_images,model_attribute,grid_size)
             torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc_{}'.format(epoch)))
             torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen_{}'.format(epoch)))
 
 
-def sample_img_and_z(args,Z_dim,dataset,run_dir):
-    fixed_z = Variable(torch.randn(args.batch_size, Z_dim).cuda())
+# def sample_img_and_z(args,Z_dim,dataset,run_dir ):
     
-    all_indices = list(range(len(dataset)))
-    rnd = np.random.RandomState(0)
-    rnd.shuffle(all_indices)
-    grid_indices = [all_indices[i % len(all_indices)] for i in range(64)]
-    images, labels = zip(*[dataset[i] for i in grid_indices])
-    sampled_imgs=torch.stack(images).cuda()
-    saved_imgs=sampled_imgs.cpu().data.numpy()[:64]
-    img_name=f'img/real.png' 
-    save_img(0,saved_imgs,run_dir,img_name  )
-    return fixed_z, sampled_imgs
+
+
+    # fixed_z = Variable(torch.randn(args.batch_size, Z_dim).cuda())
+    
+    # all_indices = list(range(len(dataset)))
+    # rnd = np.random.RandomState(0)
+    # rnd.shuffle(all_indices)
+    # grid_indices = [all_indices[i % len(all_indices)] for i in range(64)]
+    # images, labels = zip(*[dataset[i] for i in grid_indices])
+    # sampled_imgs=torch.stack(images).cuda()
+    # saved_imgs=sampled_imgs.cpu().data.numpy()[:64]
+    # img_name=f'img/real.png' 
+    # save_img(0,saved_imgs,run_dir,img_name  )
+    # return fixed_z, sampled_imgs
+
+
+
 
 if __name__ == "__main__":
     main()  

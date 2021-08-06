@@ -2,20 +2,19 @@ from __future__ import division, print_function
  
  
 from . import mmd
-import tensorflow as tf
+ 
 import torch
 from torch.distributions.uniform import Uniform
- 
+from torch.autograd import Variable
 
-class GAN(object):
+class Morphing(object):
    
 
     #langevin
-    def sample(self,  images, Generator, Discriminator, update_collection=None ):
+    def sample(self, z, images, Generator, Discriminator, update_collection=None ):
         self.images = images
         self.z=Uniform(-1., 1.).sample([self.batch_size, self.z_dim]) 
-        #TODO self.z = torch.random_uniform([self.batch_size, self.z_dim], minval=-1.,
-        #                            maxval=1., dtype=torch.float32, name='z')
+       
         self.load_model(Generator, Discriminator )
         if self.config.lan_steps > 0:
             step_lr = self.config.lan_step_lr
@@ -35,16 +34,16 @@ class GAN(object):
         d_g = self.discriminator(current_g, self.batch_size, return_layers=False, update_collection="NO_OPS")
         # note that we should use k(x,tf.stop_gradient(x)) instead of k(x,x), but k(x,x) also works very well
         _, kxy, _, _, = kernel(d_g, d_i)
-        _, kxx, _, _, = kernel(d_g, tf.stop_gradient(d_g))
+        _, kxx, _, _, = kernel(d_g, d_g.detach())
         # KL divergence
-        energy = -tf.log(tf.reduce_mean(kxy, axis=-1) + 1e-10) + tf.log(
-            tf.reduce_sum(delete_diag(kxx), axis=-1) / (self.config.batch_size - 1) + 1e-10)
-    #                     energy = -tf.log(tf.reduce_mean(kxy, axis=-1)) + tf.log(tf.reduce_mean(kxx, axis=-1))
+        energy = -torch.log(torch.mean(kxy, axis=-1) + 1e-10) + torch.log(
+            torch.mean(delete_diag(kxx), axis=-1) / (self.config.batch_size - 1) + 1e-10)
+    
             
-        z_grad = tf.gradients(energy, self.z_l)[0]
+        z_grad = torch.autograd.grad(energy, self.z_l)[0] 
         self.z_l = self.z_l - step_lr * z_grad
-        self.z_l += tf.random_normal([self.batch_size, self.z_dim], mean=0., stddev=noise_std,
-                                            dtype=tf.float32, )
+        self.z_l += torch.normal( mean=0., std=noise_std,size=(self.batch_size, self.z_dim))
+      
 
 
 
@@ -93,4 +92,9 @@ class GAN(object):
         self.discriminator = Discriminator(**disc_kw)
 
 def delete_diag(matrix):
-    return matrix - tf.matrix_diag(tf.matrix_diag_part(matrix))  # return matrix, while k_ii is 0   
+    return matrix -torch.diag(torch.diag(matrix))  # return matrix, while k_ii is 0  TODO only support 2D, check it 
+
+
+
+if __name__ == '__main__':
+    pass

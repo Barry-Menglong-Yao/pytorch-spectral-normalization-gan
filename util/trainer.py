@@ -1,4 +1,5 @@
 import argparse
+from util.image import save_image
 from util.metrics.metric_utils import reconstruct
 from util.metrics import metric_main
 import torch
@@ -89,7 +90,8 @@ batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):
     for batch_idx, (data, target) in enumerate(loader):
         if data.size()[0] != args.batch_size:
             continue
-        data, target = Variable(data.cuda()), Variable(target.cuda())
+        data = (data.cuda().to(torch.float32) / 127.5 - 1) 
+        target =  Variable(target.cuda())
 
         disc_loss=update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data)
         gen_loss=update_generator(args,Z_dim,optim_disc,optim_gen,discriminator,generator)
@@ -108,52 +110,17 @@ batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):
     if model_attribute.dgm_type.has_vae:
         scheduler_vae.step()
 
-def save_generated_img(epoch,fixed_z,generator,run_dir):
-    samples = generator(fixed_z).cpu().data.numpy()[:64]
-    img_name=f'img/fake_{str(epoch).zfill(3)}.png' 
-    save_img(epoch,samples,run_dir,img_name)
 
-def save_reconstructed_img(epoch,generator,discriminator,run_dir,sampled_imgs):
-    
-    reconstructed_img=reconstruct(sampled_imgs ,  generator,discriminator,None    )
-    reconstructed_img=reconstructed_img.cpu().data.numpy()[:64]
-    img_name=f'img/reconstruct_{str(epoch).zfill(3)}.png' 
-    save_img(epoch,reconstructed_img,run_dir,img_name  )
-
-
-
-def save_img(epoch,imgs ,run_dir,img_name):
-     
-
-
-    fig = plt.figure(figsize=(8, 8))
-    gs = gridspec.GridSpec(8, 8)
-    gs.update(wspace=0.05, hspace=0.05)
-
-    for i, sample in enumerate(imgs):
-        ax = plt.subplot(gs[i])
-        plt.axis('off')
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-        ax.set_aspect('equal')
-        plt.imshow(sample.transpose((1,2,0)) * 0.5 + 0.5)
-
-    
-    plt.savefig(os.path.join(run_dir,img_name), bbox_inches='tight')
-    plt.close(fig)
-
-def evaluate(epoch,fixed_z,generator,run_dir,discriminator,metrics,sampled_imgs,model_attribute):
+def evaluate(epoch,grid_z,generator,run_dir,discriminator,metrics,real_images,model_attribute,grid_size):
     discriminator.eval()
     generator.eval()
     rank=0
     device = torch.device('cuda', rank) 
     num_gpus=1
     evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device, run_dir )
-
-    save_generated_img(epoch,fixed_z,generator,run_dir)
-
-    if model_attribute.dgm_type.has_vae:
-        save_reconstructed_img(epoch,generator,discriminator,run_dir,sampled_imgs)
+    save_image( generator,grid_z, run_dir,epoch,grid_size,real_images,discriminator,model_attribute)
+     
+ 
     
 
 def evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device, run_dir,snapshot_pkl=None):
@@ -177,7 +144,7 @@ def load_data(batch_size):
     dataset=load_dataset()
     loader = torch.utils.data.DataLoader(
         dataset,
-            batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
+            batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
     return loader,dataset
 
 def load_model(Z_dim,model_type,model_attribute):

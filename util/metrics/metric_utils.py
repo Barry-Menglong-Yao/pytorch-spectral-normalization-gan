@@ -183,7 +183,7 @@ class ProgressMonitor:
 def compute_feature_stats_for_dataset(opts, detector_url, detector_kwargs, rel_lo=0, rel_hi=1, batch_size=64, data_loader_kwargs=None, max_items=None, **stats_kwargs):
     dataset = load_dataset()
     if data_loader_kwargs is None:
-        data_loader_kwargs = dict(pin_memory=True, num_workers=3, prefetch_factor=2)
+        data_loader_kwargs = dict(pin_memory=True, num_workers=1, prefetch_factor=2)
 
     #Try to lookup from cache.
     cache_file = None
@@ -218,7 +218,7 @@ def compute_feature_stats_for_dataset(opts, detector_url, detector_kwargs, rel_l
     for images, _labels in torch.utils.data.DataLoader(dataset=dataset, sampler=item_subset, batch_size=batch_size, **data_loader_kwargs):
         if images.shape[1] == 1:
             images = images.repeat([1, 3, 1, 1])
-        images = (images * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+        # images = (images * 127.5 + 128).clamp(0, 255).to(torch.uint8)
         features = detector(images.to(opts.device), **detector_kwargs)
         stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
         progress.update(stats.num_items)
@@ -244,7 +244,7 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
 
     # Image generation func.
     def run_generator(z, c):
-        img = G(z=z,   **opts.G_kwargs)
+        img = G(z=z )
         img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
         return img
 
@@ -263,12 +263,12 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
     # Main loop.
     while not stats.is_full():
         images = []
-        for _i in range(batch_size // batch_gen):
-            z = torch.randn([batch_gen, G.z_dim], device=opts.device)
-            # c = [torch.zeros([batch_gen, G.c_dim] ) for _i in range(batch_gen)]
-            # c = torch.from_numpy(np.stack(c)).pin_memory().to(opts.device)
-            c=torch.zeros([batch_gen, 0], device=opts.device)
-            images.append(run_generator(z, c))
+        # for _i in range(batch_size // batch_gen):
+        z = torch.randn([batch_size, G.z_dim], device=opts.device)
+        # c = [torch.zeros([batch_gen, G.c_dim] ) for _i in range(batch_gen)]
+        # c = torch.from_numpy(np.stack(c)).pin_memory().to(opts.device)
+        c=torch.zeros([batch_size, 0], device=opts.device)
+        images.append(run_generator(z, c))
         images = torch.cat(images)
         if images.shape[1] == 1:
             images = images.repeat([1, 3, 1, 1])
@@ -284,7 +284,7 @@ def compute_feature_stats_for_reconstruct(opts, detector_url, detector_kwargs, r
         batch_gen = min(batch_size, 4)
     dataset = load_dataset()
     if data_loader_kwargs is None:
-        data_loader_kwargs = dict(pin_memory=True, num_workers=3, prefetch_factor=2)
+        data_loader_kwargs = dict(pin_memory=True, num_workers=1, prefetch_factor=2)
     # Initialize.
     num_items = len(dataset)
     if max_items is not None:
@@ -312,7 +312,7 @@ def reconstruct_image(images,opts,  batch_size,dataset=None  ):
  
     real_c=generate_c(opts,dataset,batch_size)
     reconstructed_img=reconstruct(images , opts.G,opts.D,real_c,opts.device,G_kwargs=opts.G_kwargs  )
-    reconstructed_img = (reconstructed_img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+    
     return reconstructed_img
 
 
@@ -322,10 +322,10 @@ def reconstruct(images ,   G,D,real_c,device=None, G_kwargs=None   ):
         G_kwargs=   dnnlib.EasyDict()
     if device!=None:
         images=images.to( device)
- 
-    _,generated_z ,_,_ =  D(images  )
+    processed_iamges=(images.to(torch.float32) / 127.5 - 1)
+    _,generated_z ,_,_ =  D(processed_iamges  )
     reconstructed_img = G(z=generated_z  )
-    
+    reconstructed_img = (reconstructed_img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
     return reconstructed_img
 
 def generate_c(opts,dataset,batch_size):
