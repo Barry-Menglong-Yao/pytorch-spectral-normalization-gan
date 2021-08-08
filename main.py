@@ -1,7 +1,7 @@
 import argparse
 from util.image import export_sample_images 
 from util.enums import ModelAttribute
-from util.trainer import evaluate, load_model, load_optim,   train, load_data
+from util.trainer import evaluate, load_model, load_optim,   train, load_data, training_loop
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -60,51 +60,60 @@ def make_running_dir(outdir,model_type,remark,args):
     return run_dir
 
 
-
-
 def main():
+    if config_kwargs['mode'] is  None or config_kwargs['mode']  !="hyper_search": 
+        train_cifar(None, ctx, outdir, dry_run, config_kwargs  )
+    else:
+        hyper_search()
+
+def hyper_search():
+    config = {
+        "alpha":  tune.loguniform(5e-1, 200 ),
+        "beta":   tune.loguniform(1e-3, 1) 
+    }
+    gpus_per_trial = 0.5
+    num_samples=10
+    max_num_epochs=6
+    metric_name= "fid50k_full_reconstruct"
+    cpus_per_trial=4
+
+    scheduler = ASHAScheduler(
+        metric= metric_name,
+        mode="min",
+        max_t=max_num_epochs,
+        grace_period=2,
+        reduction_factor=2)         
+    reporter = CLIReporter(
+        # parameter_columns=["l1", "l2", "lr", "batch_size"],
+        metric_columns=[ "reconstruct_loss", "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"])                   
+    result = tune.run(
+        partial(train_cifar ,ctx=ctx,outdir=outdir,dry_run=dry_run,config_kwargs=config_kwargs),
+        resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
+        config=config,
+        num_samples=num_samples,
+        scheduler=scheduler,
+        progress_reporter=reporter,
+        checkpoint_at_end=False) 
+        
+
+    best_trial = result.get_best_trial(metric_name, "min", "last")
+    print("Best trial config: {}".format(best_trial.config))
+    print("Best trial final generation fid: {}".format(
+        best_trial.last_result[ "fid50k_full"]))
+    print("Best trial final reconstrction fid: {}".format(
+        best_trial.last_result["fid50k_full_reconstruct"]))
+    print("Best trial final reconstruct_loss: {}".format(
+        best_trial.last_result["reconstruct_loss"]))
+
+def train_cifar():
     args=parse_args()
     run_dir=make_running_dir(args.outdir,args.model_type,args.remark,args)
     if args.metrics is None:
         args.metrics = ['fid50k_full_reconstruct','fid50k_full']
  
-    Z_dim = constants.Z_dim
-    #number of updates to discriminator for every update to generator 
-    disc_iters = 5
-    model_attribute=ModelAttribute[args.model_type]
-    loader,dataset=load_data(args.batch_size)
-    grid_z, grid_size,real_images=export_sample_images(dataset, run_dir,  torch.device('cuda'), Z_dim,args.batch_size)
-    generator,discriminator,vae=load_model(Z_dim,args.model_type,model_attribute,args.lan_step_lr,args.lan_steps,args.batch_size ,real_images)
-    optim_gen,optim_disc,optim_vae,scheduler_g,scheduler_d,scheduler_vae=load_optim(args,discriminator,generator,vae,model_attribute)
-    
-    start_time = time.time()
-    
-    # fixed_z, sampled_imgs=sample_img_and_z(args,Z_dim,dataset,run_dir)
-    for epoch in range(2000):
-        train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,
-        model_attribute,args.batch_size,vae,optim_vae,scheduler_vae,args.vae_alpha,args.vae_beta)
-        if epoch%12==0 :
-            evaluate(epoch,grid_z,generator,run_dir,discriminator,args.metrics,real_images,model_attribute,grid_size,vae)
-            torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc_{}'.format(epoch)))
-            torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen_{}'.format(epoch)))
+    training_loop(args,run_dir)
 
-
-# def sample_img_and_z(args,Z_dim,dataset,run_dir ):
-    
-
-
-    # fixed_z = Variable(torch.randn(args.batch_size, Z_dim).cuda())
-    
-    # all_indices = list(range(len(dataset)))
-    # rnd = np.random.RandomState(0)
-    # rnd.shuffle(all_indices)
-    # grid_indices = [all_indices[i % len(all_indices)] for i in range(64)]
-    # images, labels = zip(*[dataset[i] for i in grid_indices])
-    # sampled_imgs=torch.stack(images).cuda()
-    # saved_imgs=sampled_imgs.cpu().data.numpy()[:64]
-    # img_name=f'img/real.png' 
-    # save_img(0,saved_imgs,run_dir,img_name  )
-    # return fixed_z, sampled_imgs
+ 
 
 
 

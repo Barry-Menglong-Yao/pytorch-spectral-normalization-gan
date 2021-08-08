@@ -1,6 +1,7 @@
 import argparse
+from util.enums import ModelAttribute
 from model.morph import Morphing
-from util.image import save_image
+from util.image import export_sample_images, save_image
 from util.metrics.metric_utils import reconstruct
 from util.metrics import metric_main
 import torch
@@ -21,6 +22,8 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import os
 import time
+from util import constants
+
 def update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data):
     # update discriminator
     for _ in range(disc_iters):
@@ -82,7 +85,29 @@ def load_optim(args,discriminator,generator,vae,model_attribute):
 
     return optim_gen,optim_disc,optim_vae,scheduler_g,scheduler_d,scheduler_vae
 
+
+
+
+def training_loop(args,run_dir):
+    Z_dim = constants.Z_dim
+    #number of updates to discriminator for every update to generator 
+    disc_iters = 5
+    model_attribute=ModelAttribute[args.model_type]
+    loader,dataset=load_data(args.batch_size)
+    grid_z, grid_size,real_images=export_sample_images(dataset, run_dir,  torch.device('cuda'), Z_dim,args.batch_size)
+    generator,discriminator,vae=load_model(Z_dim,args.model_type,model_attribute,args.lan_step_lr,args.lan_steps,args.batch_size ,real_images)
+    optim_gen,optim_disc,optim_vae,scheduler_g,scheduler_d,scheduler_vae=load_optim(args,discriminator,generator,vae,model_attribute)
     
+    start_time = time.time()
+    
+    # fixed_z, sampled_imgs=sample_img_and_z(args,Z_dim,dataset,run_dir)
+    for epoch in range(2000):
+        train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,
+        model_attribute,args.batch_size,vae,optim_vae,scheduler_vae,args.vae_alpha,args.vae_beta)
+        if epoch%12==0 :
+            evaluate(epoch,grid_z,generator,run_dir,discriminator,args.metrics,real_images,model_attribute,grid_size,vae)
+            torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc_{}'.format(epoch)))
+            torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen_{}'.format(epoch)))
 
 def train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,model_attribute,
 batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):
