@@ -15,7 +15,7 @@ def _rbf_kernel(X, Y, sigma=1., wt=1., K_XY_only=False):
     r = lambda x: torch.unsqueeze(x, 0)
     c = lambda x: torch.unsqueeze(x, 1)
 
-    XYsqnorm = torch.maximum(-2 * XY + c(X_sqnorms) + r(Y_sqnorms), 0.)
+    XYsqnorm = torch.maximum(-2 * XY + c(X_sqnorms) + r(Y_sqnorms), torch.tensor(0.).cuda())
 
     gamma = 1 / (2 * sigma**2)
     K_XY = wt * torch.exp(-gamma * XYsqnorm)
@@ -23,8 +23,8 @@ def _rbf_kernel(X, Y, sigma=1., wt=1., K_XY_only=False):
     if K_XY_only:
         return K_XY
 
-    XXsqnorm = torch.maximum(-2 * XX + c(X_sqnorms) + r(X_sqnorms), 0.)
-    YYsqnorm = torch.maximum(-2 * YY + c(Y_sqnorms) + r(Y_sqnorms), 0.)
+    XXsqnorm = torch.maximum(-2 * XX + c(X_sqnorms) + r(X_sqnorms), torch.tensor(0.).cuda())
+    YYsqnorm = torch.maximum(-2 * YY + c(Y_sqnorms) + r(Y_sqnorms), torch.tensor(0.).cuda())
 
     gamma = 1 / (2 * sigma**2)
     K_XX = wt * torch.exp(-gamma * XXsqnorm)

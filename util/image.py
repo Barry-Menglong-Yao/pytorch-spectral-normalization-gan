@@ -30,22 +30,22 @@ def save_image_grid(img, fname, drange, grid_size):
     if C == 3:
         PIL.Image.fromarray(img, 'RGB').save(fname)
         
-def save_image( G,grid_z, run_dir,epoch,grid_size,real_images,D,model_attribute):
+def save_image( G,grid_z, run_dir,epoch,grid_size,real_images,D,model_attribute,vae_gan):
     images = G(grid_z).cpu().data.numpy()[:64]
  
-    save_image_grid(images, os.path.join(run_dir, f'img/fakes{epoch//1000:06d}.png'), drange=[-1,1], grid_size=grid_size)
+    save_image_grid(images, os.path.join(run_dir, f'img/fakes{epoch:06d}.png'), drange=[-1,1], grid_size=grid_size)
     if model_attribute.dgm_type.has_vae:
-        grid_reconstructed_images=reconstruct_grid(real_images,G,D )
-        save_image_grid(grid_reconstructed_images, os.path.join(run_dir, f'img/reconstruct{epoch//1000:06d}.png'),drange=[0,255], grid_size=grid_size)
+        grid_reconstructed_images=reconstruct_grid(real_images,G,D,vae_gan )
+        save_image_grid(grid_reconstructed_images, os.path.join(run_dir, f'img/reconstruct{epoch:06d}.png'),drange=[0,255], grid_size=grid_size)
 
 
 
-def reconstruct_grid(grid_real_images,G,D ):
+def reconstruct_grid(grid_real_images,G,D,vae_gan ):
     # grid_reconstructed_images=[]
     # for real_images  in  grid_real_images  :
         
         
-    grid_reconstructed_images=reconstruct(grid_real_images ,  G,D ,None )
+    grid_reconstructed_images=reconstruct(grid_real_images ,  G,D ,None,vae_gan )
          
         # grid_reconstructed_images.append(reconstructed_img.cpu())
     grid_reconstructed_images= grid_reconstructed_images.cpu().numpy()
@@ -97,36 +97,36 @@ def export_sample_images(training_set, run_dir, device, Z_dim,batch_size):
 
 
 
-def save_generated_img(epoch,fixed_z,generator,run_dir):
-    samples = generator(fixed_z).cpu().data.numpy()[:64]
-    img_name=f'img/fake_{str(epoch).zfill(3)}.png' 
-    save_img(epoch,samples,run_dir,img_name)
+# def save_generated_img(epoch,fixed_z,generator,run_dir):
+#     samples = generator(fixed_z).cpu().data.numpy()[:64]
+#     img_name=f'img/fake_{str(epoch).zfill(3)}.png' 
+#     save_img(epoch,samples,run_dir,img_name)
 
-def save_reconstructed_img(epoch,generator,discriminator,run_dir,sampled_imgs):
+# def save_reconstructed_img(epoch,generator,discriminator,run_dir,sampled_imgs):
     
-    reconstructed_img=reconstruct(sampled_imgs ,  generator,discriminator,None    )
-    reconstructed_img=reconstructed_img.cpu().data.numpy()[:64]
-    img_name=f'img/reconstruct_{str(epoch).zfill(3)}.png' 
-    save_img(epoch,reconstructed_img,run_dir,img_name  )
+#     reconstructed_img=reconstruct(sampled_imgs ,  generator,discriminator,None    )
+#     reconstructed_img=reconstructed_img.cpu().data.numpy()[:64]
+#     img_name=f'img/reconstruct_{str(epoch).zfill(3)}.png' 
+#     save_img(epoch,reconstructed_img,run_dir,img_name  )
 
 
 
-def save_img(epoch,imgs ,run_dir,img_name):
+# def save_img(epoch,imgs ,run_dir,img_name):
      
 
 
-    fig = plt.figure(figsize=(8, 8))
-    gs = gridspec.GridSpec(8, 8)
-    gs.update(wspace=0.05, hspace=0.05)
+#     fig = plt.figure(figsize=(8, 8))
+#     gs = gridspec.GridSpec(8, 8)
+#     gs.update(wspace=0.05, hspace=0.05)
 
-    for i, sample in enumerate(imgs):
-        ax = plt.subplot(gs[i])
-        plt.axis('off')
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-        ax.set_aspect('equal')
-        plt.imshow(sample.transpose((1,2,0)) * 0.5 + 0.5)
+#     for i, sample in enumerate(imgs):
+#         ax = plt.subplot(gs[i])
+#         plt.axis('off')
+#         ax.set_xticklabels([])
+#         ax.set_yticklabels([])
+#         ax.set_aspect('equal')
+#         plt.imshow(sample.transpose((1,2,0)) * 0.5 + 0.5)
 
     
-    plt.savefig(os.path.join(run_dir,img_name), bbox_inches='tight')
-    plt.close(fig)
+#     plt.savefig(os.path.join(run_dir,img_name), bbox_inches='tight')
+#     plt.close(fig)

@@ -32,6 +32,8 @@ def parse_args():
     parser.add_argument('--vae_beta', type=float, default=0.01)
     parser.add_argument('--remark', type=str, default='')
     parser.add_argument('--metrics', type=str,nargs='+', default=['fid50k_full_reconstruct','fid50k_full'])
+    parser.add_argument('--lan_step_lr', type=float, default=0.1)
+    parser.add_argument('--lan_steps', type=int, default=10)
     args = parser.parse_args()
     return args
 
@@ -71,17 +73,18 @@ def main():
     disc_iters = 5
     model_attribute=ModelAttribute[args.model_type]
     loader,dataset=load_data(args.batch_size)
-    generator,discriminator,vae=load_model(Z_dim,args.model_type,model_attribute)
+    grid_z, grid_size,real_images=export_sample_images(dataset, run_dir,  torch.device('cuda'), Z_dim,args.batch_size)
+    generator,discriminator,vae=load_model(Z_dim,args.model_type,model_attribute,args.lan_step_lr,args.lan_steps,args.batch_size ,real_images)
     optim_gen,optim_disc,optim_vae,scheduler_g,scheduler_d,scheduler_vae=load_optim(args,discriminator,generator,vae,model_attribute)
     
     start_time = time.time()
-    grid_z, grid_size,real_images=export_sample_images(dataset, run_dir,  torch.device('cuda'), Z_dim,args.batch_size)
+    
     # fixed_z, sampled_imgs=sample_img_and_z(args,Z_dim,dataset,run_dir)
     for epoch in range(2000):
         train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,
         model_attribute,args.batch_size,vae,optim_vae,scheduler_vae,args.vae_alpha,args.vae_beta)
         if epoch%12==0 :
-            evaluate(epoch,grid_z,generator,run_dir,discriminator,args.metrics,real_images,model_attribute,grid_size)
+            evaluate(epoch,grid_z,generator,run_dir,discriminator,args.metrics,real_images,model_attribute,grid_size,vae)
             torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc_{}'.format(epoch)))
             torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen_{}'.format(epoch)))
 

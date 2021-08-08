@@ -92,19 +92,28 @@ class Discriminator(nn.Module):
 
 
 class VaeGan( nn.Module):
-    def __init__(self, discriminator ,generator  ):
+    def __init__(self, discriminator ,generator ,morphing ):
         super().__init__()
         self.discriminator=discriminator
    
  
         self.generator=generator
-        
-
+        self.morphing=morphing
+   
  
     def forward(self, real_img, real_c   ):
         real_logits,gen_z_of_real_img ,mu,log_var = self.discriminator(real_img  )
         reconstructed_img = self.generator(gen_z_of_real_img)
         return  reconstructed_img,mu,log_var
+
+    def sample(self,z):
+        if self.morphing.lan_steps > 0:
+            morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator )
+            generated_img=self.generator(morphed_z)
+        else:
+            generated_img=self.generator(z)
+        return generated_img
+
 
     def loss(self, reconstructed_img, real_img,mu,log_var,vae_beta,vae_alpha  ):
         recons_loss =F.mse_loss(reconstructed_img, real_img)
@@ -116,4 +125,27 @@ class VaeGan( nn.Module):
         kld_weight=batch_size/50000
         vae_loss = weighted_recons_loss + kld_weight * weighted_kld_loss
         return vae_loss,recons_loss,kld_loss
+         
+
+
+
+class Gan( nn.Module):
+    def __init__(self, discriminator ,generator ,morphing ):
+        super().__init__()
+        self.discriminator=discriminator
+   
+ 
+        self.generator=generator
+        self.morphing=morphing
+    
+
+    def sample(self,z):
+        if self.morphing.lan_steps > 0:
+            morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator  )
+            generated_img=self.generator(morphed_z)
+        else:
+            generated_img=self.generator(z)
+        return generated_img
+
+ 
          

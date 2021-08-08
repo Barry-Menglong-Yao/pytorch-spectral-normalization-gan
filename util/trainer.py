@@ -1,4 +1,5 @@
 import argparse
+from model.morph import Morphing
 from util.image import save_image
 from util.metrics.metric_utils import reconstruct
 from util.metrics import metric_main
@@ -111,19 +112,19 @@ batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):
         scheduler_vae.step()
 
 
-def evaluate(epoch,grid_z,generator,run_dir,discriminator,metrics,real_images,model_attribute,grid_size):
+def evaluate(epoch,grid_z,generator,run_dir,discriminator,metrics,real_images,model_attribute,grid_size,vae_gan):
     discriminator.eval()
     generator.eval()
     rank=0
     device = torch.device('cuda', rank) 
     num_gpus=1
-    evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device, run_dir )
-    save_image( generator,grid_z, run_dir,epoch,grid_size,real_images,discriminator,model_attribute)
+    evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device, run_dir,vae_gan )
+    save_image( generator,grid_z, run_dir,epoch,grid_size,real_images,discriminator,model_attribute,vae_gan)
      
  
     
 
-def evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device, run_dir,snapshot_pkl=None):
+def evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device, run_dir,vae_gan,snapshot_pkl=None):
     if  (len(metrics) > 0):
         if rank == 0:
             print('Evaluating metrics...')
@@ -131,7 +132,7 @@ def evaluate_metrics(epoch,generator,discriminator,metrics,num_gpus,rank,device,
         
         for metric in metrics: 
             result_dict = metric_main.calc_metric(metric=metric, G=generator,
-                 num_gpus=num_gpus, rank=rank, device=device,D=discriminator)
+                 num_gpus=num_gpus, rank=rank, device=device,D=discriminator,vae_gan=vae_gan)
    
             if rank == 0:
                 metric_main.report_metric(result_dict, run_dir=run_dir, snapshot_pkl=snapshot_pkl)
@@ -147,7 +148,7 @@ def load_data(batch_size):
             batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
     return loader,dataset
 
-def load_model(Z_dim,model_type,model_attribute):
+def load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_size,images ):
     # discriminator = torch.nn.DataParallel(Discriminator()).cuda() # TODO: try out multi-gpu training
     if model_type == 'resnet':
         discriminator = model_resnet.Discriminator().cuda()
@@ -155,8 +156,12 @@ def load_model(Z_dim,model_type,model_attribute):
     else:
         discriminator = model.Discriminator(model_attribute.dgm_type.has_vae,Z_dim).cuda()
         generator = model.Generator(Z_dim).cuda()
+        dealed_imgs=torch.from_numpy(images)
+        dealed_imgs = (dealed_imgs.cuda().to(torch.float32) / 127.5 - 1) 
+        morphing=  Morphing(lan_step_lr,lan_steps,batch_size,Z_dim,dealed_imgs)
         if model_attribute.dgm_type.has_vae:
-            vae=model.VaeGan(discriminator,generator) 
+            
+            vae_gan=model.VaeGan(discriminator,generator,morphing) 
         else:
-            vae=None
-    return generator,discriminator,vae
+            vae_gan=model.Gan(discriminator,generator,morphing) 
+    return generator,discriminator,vae_gan
