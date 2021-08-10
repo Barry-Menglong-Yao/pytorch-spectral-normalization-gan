@@ -106,8 +106,8 @@ def training_loop(args,run_dir):
         model_attribute,args.batch_size,vae,optim_vae,scheduler_vae,args.vae_alpha,args.vae_beta)
         if epoch%12==0 :
             evaluate(epoch,grid_z,generator,run_dir,discriminator,args.metrics,real_images,model_attribute,grid_size,vae)
-            torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc_{}'.format(epoch)))
-            torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen_{}'.format(epoch)))
+            torch.save(discriminator.state_dict(), os.path.join(run_dir, 'checkpoint/disc'))
+            torch.save(generator.state_dict(), os.path.join(run_dir, 'checkpoint/gen'))
 
 def train(epoch,loader,args,disc_iters,Z_dim,optim_disc,optim_gen,discriminator,generator,scheduler_d,scheduler_g,start_time,model_attribute,
 batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):

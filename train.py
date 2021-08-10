@@ -20,6 +20,10 @@ import matplotlib.gridspec as gridspec
 import os
 import re
 import time
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+from functools import partial
 def parse_args():
 
     parser = argparse.ArgumentParser()
@@ -34,6 +38,7 @@ def parse_args():
     parser.add_argument('--metrics', type=str,nargs='+', default=['fid50k_full_reconstruct','fid50k_full'])
     parser.add_argument('--lan_step_lr', type=float, default=0.1)
     parser.add_argument('--lan_steps', type=int, default=10)
+    parser.add_argument('--mode', type=str, default='train')
     args = parser.parse_args()
     return args
 
@@ -61,21 +66,22 @@ def make_running_dir(outdir,model_type,remark,args):
 
 
 def main():
-    if config_kwargs['mode'] is  None or config_kwargs['mode']  !="hyper_search": 
-        train_cifar(None, ctx, outdir, dry_run, config_kwargs  )
+    args=parse_args()
+    if args.mode  is  None or args.mode  !="hyper_search": 
+        train_cifar(None, args  )
     else:
-        hyper_search()
+        hyper_search(args)
 
-def hyper_search():
+def hyper_search(args):
     config = {
-        "alpha":  tune.loguniform(5e-1, 200 ),
-        "beta":   tune.loguniform(1e-3, 1) 
+        "alpha":  tune.loguniform(5e-1, 100 ),
+        "beta":   tune.loguniform(1e-3, 1)  
     }
-    gpus_per_trial = 0.5
-    num_samples=10
-    max_num_epochs=6
-    metric_name= "fid50k_full_reconstruct"
-    cpus_per_trial=4
+    gpus_per_trial = 0.25
+    num_samples=50
+    max_num_epochs=5
+    metric_name= "fid50k_full"
+    cpus_per_trial=2
 
     scheduler = ASHAScheduler(
         metric= metric_name,
@@ -87,7 +93,7 @@ def hyper_search():
         # parameter_columns=["l1", "l2", "lr", "batch_size"],
         metric_columns=[ "reconstruct_loss", "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"])                   
     result = tune.run(
-        partial(train_cifar ,ctx=ctx,outdir=outdir,dry_run=dry_run,config_kwargs=config_kwargs),
+        partial(train_cifar ,args=args),
         resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
         config=config,
         num_samples=num_samples,
@@ -105,8 +111,8 @@ def hyper_search():
     print("Best trial final reconstruct_loss: {}".format(
         best_trial.last_result["reconstruct_loss"]))
 
-def train_cifar():
-    args=parse_args()
+def train_cifar(tuner_config,args):
+    update_config(args,tuner_config) 
     run_dir=make_running_dir(args.outdir,args.model_type,args.remark,args)
     if args.metrics is None:
         args.metrics = ['fid50k_full_reconstruct','fid50k_full']
@@ -114,7 +120,10 @@ def train_cifar():
     training_loop(args,run_dir)
 
  
-
+def update_config(args,tuner_config) :
+    if tuner_config!=None:
+        args.vae_alpha=tuner_config["alpha"]
+        args.vae_beta=tuner_config["beta"]
 
 
 
