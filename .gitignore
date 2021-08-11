@@ -106,3 +106,4 @@ training_runs/**
 testing_runs/**
 checkpoints/**
 .vscode/launch.json
+logs/**

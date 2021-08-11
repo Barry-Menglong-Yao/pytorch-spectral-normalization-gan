@@ -26,7 +26,10 @@ from util.metrics import metric_utils
 from util.torch_utils import training_stats
 from util.torch_utils import custom_ops
 from util.torch_utils import misc
-
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+from functools import partial
 #----------------------------------------------------------------------------
 
 def subprocess_fn(rank, args, temp_dir,generator,discriminator,vae_gan):
@@ -55,7 +58,7 @@ def subprocess_fn(rank, args, temp_dir,generator,discriminator,vae_gan):
     torch.backends.cudnn.allow_tf32 = False
     G = copy.deepcopy(generator).eval().requires_grad_(False).to(device)
     D = copy.deepcopy(discriminator).eval().requires_grad_(False).to(device)
-
+    total_result_dict=dict()
     # Calculate each metric.
     for metric in args.metrics:
         if rank == 0 and args.verbose:
@@ -67,7 +70,10 @@ def subprocess_fn(rank, args, temp_dir,generator,discriminator,vae_gan):
             metric_main.report_metric(result_dict, run_dir=args.run_dir, snapshot_pkl=args.network_pkl)
         if rank == 0 and args.verbose:
             print()
-
+        total_result_dict.update(result_dict.results)
+    if args.mode=="hyper_search":
+             
+            tune.report(**total_result_dict)
     # Done.
     if rank == 0 and args.verbose:
         print('Exiting...')
@@ -87,17 +93,19 @@ class CommaSeparatedList(click.ParamType):
 
 @click.command()
 @click.pass_context
-@click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH', required=True)
-@click.option('--epoch', help=' epoch', type=int, default=1, metavar='INT' )
+@click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="training_runs/00043-SNGAN_VAE-0.0-0.000-/checkpoint", required=True)
+@click.option('--epoch', help=' epoch', type=int, default=828, metavar='INT' )
 @click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full,fid50k_full_reconstruct' , show_default=True)
 @click.option('--data', help='Dataset to evaluate metrics against (directory or zip) [default: same as training data]', metavar='PATH')
 
 @click.option('--gpus', help='Number of GPUs to use', type=int, default=1, metavar='INT', show_default=True)
 @click.option('--verbose', help='Print optional information', type=bool, default=True, metavar='BOOL', show_default=True)
 @click.option('--model_type', help=' ',default='SNGAN_VAE', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
+
 @click.option('--lan_steps', help=' epoch', type=int, default=10, metavar='INT' )
 @click.option('--lan_step_lr', help='lan_step_lr', type=float, default=0.1)
-def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr):
+@click.option('--mode', help=' ',default='test', type=click.Choice(['test','hyper_search' ]))
+def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
     """Calculate quality metrics for previous training run or pretrained network pickle.
 
     Examples:
@@ -132,10 +140,65 @@ def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
         ppl_zend     Perceptual path length in Z at path endpoints against cropped image.
         ppl_wend     Perceptual path length in W at path endpoints against cropped image.
     """
+    if mode!="hyper_search":
+        calc_metric(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
+    else:
+        hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
+
+
+
+def hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
+    config = {
+        "lan_steps":  tune.choice([10,15,20,50]),
+        "lan_step_lr":   tune.choice([0.01,0.1,0.3,0.5])
+    }
+    gpus_per_trial = 0.5
+    num_samples=16
+    max_num_epochs=1
+    metric_name= "fid50k_full"
+    cpus_per_trial=2
+
+    scheduler = ASHAScheduler(
+        metric= metric_name,
+        mode="min",
+        max_t=max_num_epochs,
+        grace_period=1,
+        reduction_factor=2)         
+    reporter = CLIReporter(
+        # parameter_columns=["l1", "l2", "lr", "batch_size"],
+        metric_columns=[  "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"])                   
+    result = tune.run(
+        partial(calc_metric ,ctx=ctx,network_pkl=network_pkl,epoch=epoch, metrics=metrics, data=data,  gpus=gpus, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr,mode=mode),
+        resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
+        config=config,
+        num_samples=num_samples,
+        scheduler=scheduler,
+        progress_reporter=reporter,
+        checkpoint_at_end=False) 
+        
+
+    best_trial = result.get_best_trial(metric_name, "min", "last")
+    print("Best trial config: {}".format(best_trial.config))
+    print("Best trial final generation fid: {}".format(
+        best_trial.last_result[ "fid50k_full"]))
+    print("Best trial final reconstrction fid: {}".format(
+        best_trial.last_result["fid50k_full_reconstruct"]))
+ 
+
+
+
+def update_config(lan_steps,lan_step_lr,tuner_config) :
+    if tuner_config!=None:
+        return tuner_config["lan_steps"],tuner_config["lan_step_lr"]
+    else:
+        return lan_steps,lan_step_lr
+def calc_metric(tuner_config,ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
+    lan_steps,lan_step_lr=update_config(lan_steps,lan_step_lr,tuner_config) 
     dnnlib.util.Logger(should_flush=True)
 
     # Validate arguments.
-    args = dnnlib.EasyDict(metrics=metrics, num_gpus=gpus, network_pkl=network_pkl, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr)
+    args = dnnlib.EasyDict(metrics=metrics, num_gpus=gpus, network_pkl=network_pkl, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr,
+    mode=mode)
     if not all(metric_main.is_valid_metric(metric) for metric in args.metrics):
         ctx.fail('\n'.join(['--metrics can only contain the following values:'] + metric_main.list_valid_metrics()))
     if not args.num_gpus >= 1:
@@ -171,6 +234,6 @@ def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
 #----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    calc_metrics() # pylint: disable=no-value-for-parameter
+    main() # pylint: disable=no-value-for-parameter
 
 #----------------------------------------------------------------------------

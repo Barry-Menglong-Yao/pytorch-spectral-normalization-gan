@@ -150,7 +150,7 @@ def hyper_search(args):
     # print("Best trial final reconstruct_loss: {}".format(
     #     best_trial.last_result["reconstruct_loss"]))
 
-def train_cifar(tuner_config,args, checkpoint_dir=None):
+def train_cifar(tuner_config, checkpoint_dir=None,args=None):
 
    
 

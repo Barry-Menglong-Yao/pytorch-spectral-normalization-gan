@@ -1,0 +1,9 @@
+ 
+PyYAML==5.1.2
+ 
+terminado==0.8.1
+test-tube==0.7.0
+ 
+torchnet==0.0.4
+torchsummary==1.5.1
+  
