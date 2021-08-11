@@ -9,7 +9,8 @@ from torch.autograd import Variable
 
 class Morphing(nn.Module):
    
-
+    def forward(self    ):
+        pass
     #langevin
     def morph_z(self, z,  generator, discriminator ):
         z.requires_grad = True
@@ -56,7 +57,7 @@ class Morphing(nn.Module):
 
 
     def __init__(self,  lan_step_lr,lan_steps,   batch_size,  z_dim,images):
-
+        super().__init__()
  
         self.lan_step_lr = lan_step_lr
         self.lan_steps=lan_steps

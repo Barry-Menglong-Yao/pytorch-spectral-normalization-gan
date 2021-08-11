@@ -150,6 +150,7 @@ def calc_metrics(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
     dataset=load_dataset()
     args.run_dir ="testing_runs/metric"
     _, real_images, _ = setup_snapshot_image_grid(training_set=dataset,batch_size=batch_size)
+    real_images =  torch.from_numpy(real_images).cuda()
     generator,discriminator,vae_gan=load_model(constants.Z_dim,None,model_attribute,args.lan_step_lr,args.lan_steps,batch_size,real_images)
     generator.load_state_dict(torch.load(network_pkl+"/gen_"+str(epoch)))
     discriminator.load_state_dict(torch.load(network_pkl+"/disc_"+str(epoch)))

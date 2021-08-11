@@ -24,6 +24,7 @@ from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 from functools import partial
+from ray.tune.schedulers import PopulationBasedTraining
 def parse_args():
 
     parser = argparse.ArgumentParser()
@@ -36,8 +37,8 @@ def parse_args():
     parser.add_argument('--vae_beta', type=float, default=0.01)
     parser.add_argument('--remark', type=str, default='')
     parser.add_argument('--metrics', type=str,nargs='+', default=['fid50k_full_reconstruct','fid50k_full'])
-    parser.add_argument('--lan_step_lr', type=float, default=0.1)
-    parser.add_argument('--lan_steps', type=int, default=10)
+    parser.add_argument('--lan_step_lr', type=float, default=0)
+    parser.add_argument('--lan_steps', type=int, default=0)
     parser.add_argument('--mode', type=str, default='train')
     args = parser.parse_args()
     return args
@@ -73,33 +74,71 @@ def main():
         hyper_search(args)
 
 def hyper_search(args):
-    config = {
-        "alpha":  tune.loguniform(5e-1, 100 ),
-        "beta":   tune.loguniform(1e-3, 1)  
-    }
+    scheduler = PopulationBasedTraining(
+    perturbation_interval=5,
+    hyperparam_mutations={
+        "alpha":  tune.choice([0.000001,0.00001, 0.0001, 0.001, 0.01,0.1,1,10,100]),
+        "beta":   tune.choice([0.00000001,0.0000001,0.000001,0.00001, 0.0001, 0.001, 0.01,0.1]),
+    })
+
+     
     gpus_per_trial = 0.25
     num_samples=50
-    max_num_epochs=5
+    tune_iter=6
     metric_name= "fid50k_full"
     cpus_per_trial=2
-
-    scheduler = ASHAScheduler(
-        metric= metric_name,
-        mode="min",
-        max_t=max_num_epochs,
-        grace_period=2,
-        reduction_factor=2)         
     reporter = CLIReporter(
         # parameter_columns=["l1", "l2", "lr", "batch_size"],
-        metric_columns=[ "reconstruct_loss", "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"])                   
+        metric_columns=[  "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"],max_progress_rows=num_samples) 
     result = tune.run(
         partial(train_cifar ,args=args),
-        resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
-        config=config,
-        num_samples=num_samples,
+         
         scheduler=scheduler,
+        verbose=1,
+        stop={
+            "training_iteration": tune_iter,
+        },
+        metric=metric_name,
+        resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
+        mode="min",
+        num_samples=num_samples,
         progress_reporter=reporter,
-        checkpoint_at_end=False) 
+        config={
+            "alpha":  tune.choice([0.000001,0.00001, 0.0001, 0.001, 0.01,0.1,1,10,100]),
+            "beta":   tune.sample_from(lambda _: (0.1)**np.random.randint(0, 8)) ,
+            
+        })
+
+
+
+
+
+
+
+
+
+    # config = {
+    #     "alpha":  tune.choice([0.000001,0.00001, 0.0001, 0.001, 0.01,0.1,1,10,100]),
+    #     "beta":   tune.sample_from(lambda _: (0.1)**np.random.randint(0, 8)) 
+    # }
+    
+
+
+    # scheduler = ASHAScheduler(
+    #     metric= metric_name,
+    #     mode="min",
+    #     max_t=max_num_epochs,
+    #     grace_period=2,
+    #     reduction_factor=2)         
+                      
+    # result = tune.run(
+    #     partial(train_cifar ,args=args),
+    #     resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
+    #     config=config,
+    #     num_samples=num_samples,
+    #     scheduler=scheduler,
+    #     progress_reporter=reporter,
+    #     checkpoint_at_end=False) 
         
 
     best_trial = result.get_best_trial(metric_name, "min", "last")
@@ -108,16 +147,18 @@ def hyper_search(args):
         best_trial.last_result[ "fid50k_full"]))
     print("Best trial final reconstrction fid: {}".format(
         best_trial.last_result["fid50k_full_reconstruct"]))
-    print("Best trial final reconstruct_loss: {}".format(
-        best_trial.last_result["reconstruct_loss"]))
+    # print("Best trial final reconstruct_loss: {}".format(
+    #     best_trial.last_result["reconstruct_loss"]))
 
-def train_cifar(tuner_config,args):
+def train_cifar(tuner_config,args, checkpoint_dir=None):
+
+   
+
     update_config(args,tuner_config) 
     run_dir=make_running_dir(args.outdir,args.model_type,args.remark,args)
     if args.metrics is None:
         args.metrics = ['fid50k_full_reconstruct','fid50k_full']
- 
-    training_loop(args,run_dir)
+    training_loop(args,run_dir,checkpoint_dir)
 
  
 def update_config(args,tuner_config) :
