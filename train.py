@@ -33,8 +33,8 @@ def parse_args():
     parser.add_argument('--loss', type=str, default='bce')
     parser.add_argument('--outdir', type=str, default='training_runs')
     parser.add_argument('--model_type', type=str, default='SNGAN_VAE')
-    parser.add_argument('--vae_alpha', type=float, default=100)
-    parser.add_argument('--vae_beta', type=float, default=0.01)
+    parser.add_argument('--vae_alpha', type=float, default=0.1)
+    parser.add_argument('--vae_beta', type=float, default=0.1)
     parser.add_argument('--remark', type=str, default='')
     parser.add_argument('--metrics', type=str,nargs='+', default=['fid50k_full_reconstruct','fid50k_full'])
     parser.add_argument('--lan_step_lr', type=float, default=0)
@@ -69,7 +69,7 @@ def make_running_dir(outdir,model_type,remark,args):
 def main():
     args=parse_args()
     if args.mode  is  None or args.mode  !="hyper_search": 
-        train_cifar(None, args  )
+        train_cifar(None,None, args  )
     else:
         hyper_search(args)
 
@@ -82,7 +82,7 @@ def hyper_search(args):
     })
 
      
-    gpus_per_trial = 0.25
+    gpus_per_trial = 1
     num_samples=50
     tune_iter=6
     metric_name= "fid50k_full"

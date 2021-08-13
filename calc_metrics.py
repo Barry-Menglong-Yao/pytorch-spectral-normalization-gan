@@ -36,7 +36,7 @@ def subprocess_fn(rank, args, temp_dir,generator,discriminator,vae_gan):
     dnnlib.util.Logger(should_flush=True)
     
     # Init torch.distributed.
-    if args.num_gpus > 1:
+    if args.num_gpus > 1: 
         init_file = os.path.abspath(os.path.join(temp_dir, '.torch_distributed_init'))
         if os.name == 'nt':
             init_method = 'file:///' + init_file.replace('\\', '/')
@@ -85,6 +85,8 @@ class CommaSeparatedList(click.ParamType):
 
     def convert(self, value, param, ctx):
         _ = param, ctx
+        if   isinstance(value, list):
+            return value
         if value is None or value.lower() == 'none' or value == '':
             return []
         return value.split(',')
@@ -102,8 +104,8 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--verbose', help='Print optional information', type=bool, default=True, metavar='BOOL', show_default=True)
 @click.option('--model_type', help=' ',default='SNGAN_VAE', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
 
-@click.option('--lan_steps', help=' epoch', type=int, default=10, metavar='INT' )
-@click.option('--lan_step_lr', help='lan_step_lr', type=float, default=0.1)
+@click.option('--lan_steps', help=' epoch', type=int, default=0, metavar='INT' )
+@click.option('--lan_step_lr', help='lan_step_lr', type=float, default=0 )
 @click.option('--mode', help=' ',default='test', type=click.Choice(['test','hyper_search' ]))
 def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
     """Calculate quality metrics for previous training run or pretrained network pickle.
@@ -141,7 +143,7 @@ def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_st
         ppl_wend     Perceptual path length in W at path endpoints against cropped image.
     """
     if mode!="hyper_search":
-        calc_metric(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
+        calc_metric(None,ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
     else:
         hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
 

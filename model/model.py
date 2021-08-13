@@ -51,6 +51,8 @@ class Discriminator(nn.Module):
         if has_vae:
             self.fc_mu = SpectralNorm(nn.Linear(w_g * w_g * 512, z_dim))
             self.fc_var = SpectralNorm(nn.Linear(w_g * w_g * 512, z_dim))
+            # self.fc_mu = nn.Linear(w_g * w_g * 512, z_dim)  #TODO no spectralNorm?
+            # self.fc_var = nn.Linear(w_g * w_g * 512, z_dim) 
         self.has_vae=has_vae
 
     def forward(self, x):
@@ -101,7 +103,7 @@ class VaeGan( nn.Module):
         self.morphing=morphing
    
  
-    def forward(self, real_img, real_c   ):
+    def forward(self, real_img, real_c , **kwargs  ):
         real_logits,gen_z_of_real_img ,mu,log_var = self.discriminator(real_img  )
         reconstructed_img = self.generator(gen_z_of_real_img)
         return  reconstructed_img,mu,log_var
@@ -114,15 +116,15 @@ class VaeGan( nn.Module):
             generated_img=self.generator(z)
         return generated_img
 
-
-    def loss(self, reconstructed_img, real_img,mu,log_var,vae_beta,vae_alpha  ):
+ 
+    def loss_function(self, reconstructed_img, real_img,mu,log_var,kld_weight,vae_beta=1,vae_alpha=1  ):
         recons_loss =F.mse_loss(reconstructed_img, real_img)
         weighted_recons_loss=recons_loss.mul(vae_alpha )
         
         kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
         weighted_kld_loss=kld_loss.mul( vae_beta)
-        batch_size=reconstructed_img.shape[0]
-        kld_weight=batch_size/50000
+  
+        
         vae_loss = weighted_recons_loss + kld_weight * weighted_kld_loss
         return vae_loss,recons_loss,kld_loss
          

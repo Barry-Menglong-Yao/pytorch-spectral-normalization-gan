@@ -63,7 +63,8 @@ def update_vae(img,c,vae,optim_vae,batch_size,vae_alpha,vae_beta):
     optim_vae.zero_grad()
      
     reconstructed_img, mu,log_var    = vae(img, c  )
-    vae_loss,recons_loss,kld_loss=vae.loss(reconstructed_img, img,mu,log_var,vae_beta,vae_alpha)
+    kld_weight=batch_size/50000
+    vae_loss,recons_loss,kld_loss=vae.loss_function(reconstructed_img, img,mu,log_var,kld_weight,vae_beta,vae_alpha)
     vae_loss.backward()
     optim_vae.step()
     return vae_loss,recons_loss,kld_loss
@@ -215,8 +216,10 @@ def load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_size
         discriminator = model.Discriminator(model_attribute.dgm_type.has_vae,Z_dim).cuda()
         generator = model.Generator(Z_dim).cuda()
          
-        dealed_imgs = (images  / 127.5 - 1) 
-        morphing=  Morphing(lan_step_lr,lan_steps,batch_size,Z_dim,dealed_imgs)
+        if images!=None:
+            images = (images/ 127.5 - 1) 
+        
+        morphing=  Morphing(lan_step_lr,lan_steps,batch_size,Z_dim,images)
         if model_attribute.dgm_type.has_vae:
             
             vae_gan=model.VaeGan(discriminator,generator,morphing) 

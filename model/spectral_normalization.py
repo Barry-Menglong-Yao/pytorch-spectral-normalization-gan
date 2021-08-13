@@ -64,5 +64,12 @@ class SpectralNorm(nn.Module):
 
 
     def forward(self, *args):
+         
         self._update_u_v()
         return self.module.forward(*args)
+
+    
+    def check_grad(self):
+        u = getattr(self.module, self.name + "_u")
+        if u.requires_grad ==True:
+            print("u.requires_grad ==True")
