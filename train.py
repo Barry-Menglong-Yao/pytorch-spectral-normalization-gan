@@ -40,6 +40,8 @@ def parse_args():
     parser.add_argument('--lan_step_lr', type=float, default=0)
     parser.add_argument('--lan_steps', type=int, default=0)
     parser.add_argument('--mode', type=str, default='train')
+    parser.add_argument('--evaluate_interval',  type=int,
+                        default=12) #5
     args = parser.parse_args()
     return args
 
@@ -83,10 +85,10 @@ def hyper_search(args):
 
      
     gpus_per_trial = 1
-    num_samples=50
+    num_samples=5
     tune_iter=6
     metric_name= "fid50k_full"
-    cpus_per_trial=2
+    cpus_per_trial=7
     reporter = CLIReporter(
         # parameter_columns=["l1", "l2", "lr", "batch_size"],
         metric_columns=[  "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"],max_progress_rows=num_samples) 
