@@ -85,7 +85,7 @@ def hyper_search(args):
 
      
     gpus_per_trial = 1
-    num_samples=5
+    num_samples=3
     tune_iter=6
     metric_name= "fid50k_full"
     cpus_per_trial=7

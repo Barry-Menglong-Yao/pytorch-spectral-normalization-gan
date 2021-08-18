@@ -13,6 +13,7 @@ class DgmType(Enum):
 class ModelAttribute(Enum):
     SNGAN = (DgmType.GAN,  "training.model.sngan.GeneratorImpl","training.model.sngan.DiscriminatorImpl",128,"training.model.sngan.VaeGanImpl",5)
     SNGAN_VAE= (DgmType.GAN_VAE,  "training.model.sngan.GeneratorImpl","training.model.sngan.DiscriminatorImpl",128,"training.model.sngan.VaeGanImpl",5)
+    UNet= (DgmType.GAN_VAE,  "training.model.sngan.GeneratorImpl","training.model.sngan.DiscriminatorImpl",128,"training.model.sngan.VaeGanImpl",5)
     def __init__(self, dgm_type, g_model_name,d_model_name,z_dim,model_name,disc_iters):
         self.dgm_type = dgm_type       # in kilograms
      

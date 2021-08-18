@@ -8,30 +8,50 @@ channels = 3
 leak = 0.1
 w_g = 4
 
+
+class ConvNorm(nn.Module):
+    """(convolution => [BN] => ReLU) """
+
+    def __init__(self, in_channels, out_channels, mid_channels=None):
+        super().__init__()
+   
+        self.conv = nn.Sequential(
+      
+            nn.ConvTranspose2d(in_channels, out_channels, 4,  stride=2, padding=(1,1)),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        return self.conv(x)
+
 class Generator(nn.Module):
     def __init__(self, z_dim):
         super(Generator, self).__init__()
         self.z_dim = z_dim
-        # self.c_dim=c_
+    
 
-        self.model = nn.Sequential(
+        self.conv_norm1=nn.Sequential(
             nn.ConvTranspose2d(z_dim, 512, 4, stride=1),
             nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.ConvTranspose2d(512, 256, 4, stride=2, padding=(1,1)),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.ConvTranspose2d(256, 128, 4, stride=2, padding=(1,1)),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, 4, stride=2, padding=(1,1)),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, channels, 3, stride=1, padding=(1,1)),
+            nn.ReLU())
+        self.conv_norm2=ConvNorm(512, 256)
+        self.conv_norm3=ConvNorm(256, 128)
+        self.conv_norm4=ConvNorm(128, 64)
+        self.conv5=nn.Sequential(nn.ConvTranspose2d(64, channels, 3, stride=1, padding=(1,1)),
             nn.Tanh())
 
+
+        
+
     def forward(self, z):
-        return self.model(z.view(-1, self.z_dim, 1, 1))
+        z=z.view(-1, self.z_dim, 1, 1)
+        up1=self.conv_norm1(z)#128,1,1->64,512,4,4
+        up2=self.conv_norm2(up1)#512,4,4->256,8,8
+        up3=self.conv_norm3(up2)#256,8,8->128,16,16
+        up4=self.conv_norm4(up3)#128,16,16->64,32,32
+        up5=self.conv5(up4)
+        return up5
 
 class Discriminator(nn.Module):
     def __init__(self,has_vae,z_dim):
@@ -57,19 +77,19 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         m = x
-        m = nn.LeakyReLU(leak)(self.conv1(m))
-        m = nn.LeakyReLU(leak)(self.conv2(m))
-        m = nn.LeakyReLU(leak)(self.conv3(m))
-        m = nn.LeakyReLU(leak)(self.conv4(m))
-        m = nn.LeakyReLU(leak)(self.conv5(m))
-        m = nn.LeakyReLU(leak)(self.conv6(m))
-        m = nn.LeakyReLU(leak)(self.conv7(m))
-        m=m.view(-1,w_g * w_g * 512)
-        out=self.fc(m)
+        x1 = nn.LeakyReLU(leak)(self.conv1(m)) #64,32,32
+        x2 = nn.LeakyReLU(leak)(self.conv2(x1)) #64,16,16
+        x2 = nn.LeakyReLU(leak)(self.conv3(x2))#128,16
+        x3 = nn.LeakyReLU(leak)(self.conv4(x2))#128,8
+        x3 = nn.LeakyReLU(leak)(self.conv5(x3))#256,8
+        x4 = nn.LeakyReLU(leak)(self.conv6(x3))#256,4
+        x4 = nn.LeakyReLU(leak)(self.conv7(x4))#512,4
+        flag_down3=x4.view(-1,w_g * w_g * 512)
+        out=self.fc(flag_down3)
 
         if self.has_vae:
-            mu = self.fc_mu(m)
-            log_var = self.fc_var(m)
+            mu = self.fc_mu(flag_down3)
+            log_var = self.fc_var(flag_down3)
             z = self.reparameterize(mu, log_var)
         else:
             mu=None 

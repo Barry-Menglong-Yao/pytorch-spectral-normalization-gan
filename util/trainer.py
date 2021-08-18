@@ -25,6 +25,7 @@ import time
 from util import constants
 from ray import tune
 from util import tuner_helper
+from model import unet_model 
 
 def update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data):
     # update discriminator
@@ -149,15 +150,15 @@ batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):
             continue
         data = (data.cuda().to(torch.float32) / 127.5 - 1) 
         target =  Variable(target.cuda())
-
-        disc_loss=update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data)
-        gen_loss=update_generator(args,Z_dim,optim_disc,optim_gen,discriminator,generator)
+        #TODO gan first
         if model_attribute.dgm_type.has_vae:
             vae_loss,recons_loss,kld_loss=update_vae( data,target,vae,optim_vae,batch_size,vae_alpha,vae_beta)
         else:
             vae_loss=0
             recons_loss=0
             kld_loss=0
+        disc_loss=update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data)
+        gen_loss=update_generator(args,Z_dim,optim_disc,optim_gen,discriminator,generator)
 
         if batch_idx % 100 == 0:
             tick_end_time = time.time()
@@ -207,11 +208,15 @@ def load_data(batch_size):
             batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
     return loader,dataset
 
-def load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_size,images ):
+def  load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_size,images ):
     # discriminator = torch.nn.DataParallel(Discriminator()).cuda() # TODO: try out multi-gpu training
     if model_type == 'resnet':
         discriminator = model_resnet.Discriminator().cuda()
         generator = model_resnet.Generator(Z_dim).cuda()
+    elif model_type=='UNet':
+        discriminator = unet_model.Discriminator(model_attribute.dgm_type.has_vae,Z_dim).cuda()
+        generator = unet_model.Generator(Z_dim).cuda()
+        vae_gan=unet_model.UNet(n_channels=3, n_classes=1, bilinear=True).cuda()
     else:
         discriminator = model.Discriminator(model_attribute.dgm_type.has_vae,Z_dim).cuda()
         generator = model.Generator(Z_dim).cuda()

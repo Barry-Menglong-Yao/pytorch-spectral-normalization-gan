@@ -20,7 +20,7 @@ class VAEXperiment(pl.LightningModule):
 
     def __init__(self,
                  vae_model,
-                 params: dict,Z_dim ,evaluate_interval) -> None:
+                 params: dict,Z_dim ,evaluate_interval,fine_tune_module) -> None:
         super(VAEXperiment, self).__init__()
 
         self.model = vae_model
@@ -30,7 +30,7 @@ class VAEXperiment(pl.LightningModule):
         self.first_step=True
         self.Z_dim=Z_dim
         # self.param_checker=ParamChecker(self.model.generator)
-        
+        self.fine_tune_module=fine_tune_module
  
         self.evaluate_interval=evaluate_interval
         try:
@@ -39,7 +39,8 @@ class VAEXperiment(pl.LightningModule):
             pass
 
     def forward(self, input, **kwargs) :
-        self.model.generator.eval()
+        if  self.fine_tune_module !="g_d_e":
+            self.model.generator.eval()#for BatchNorm freeze
         return self.model(input,None, **kwargs)
 
     def training_step(self, batch, batch_idx, optimizer_idx = 0):

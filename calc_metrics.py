@@ -10,7 +10,7 @@
 
 import os
 from util.data import load_dataset
-from util.image import export_sample_images, setup_snapshot_image_grid
+from util.image import   setup_snapshot_image_grid
 from util.enums import ModelAttribute
 import click
 import json
@@ -18,7 +18,7 @@ import tempfile
 import copy
 import torch
 from util import dnnlib
-from util.trainer import load_data, load_model
+from util.trainer import   load_model
 from util import constants
  
 from util.metrics import metric_main
@@ -32,30 +32,29 @@ from ray.tune.schedulers import ASHAScheduler
 from functools import partial
 #----------------------------------------------------------------------------
 
-def subprocess_fn(rank, args, temp_dir,generator,discriminator,vae_gan):
+def subprocess_fn(rank, args, temp_dir ):
+    if args.verbose:
+        print(f'Loading network from "{args.network_pkl}"...')
+    model_attribute=ModelAttribute[args.model_type]
+    batch_size=64
+    dataset=load_dataset()
+    args.run_dir ="testing_runs/metric"
+    _, real_images, _ = setup_snapshot_image_grid(training_set=dataset,batch_size=batch_size)
+    real_images =  torch.from_numpy(real_images).cuda()
+    generator,discriminator,vae_gan=load_model(constants.Z_dim,None,model_attribute,args.lan_step_lr,args.lan_steps,batch_size,real_images)
+    if args.epoch>=0:
+        gen_pkl=args.network_pkl+"/gen_"+str(args.epoch)
+        dis_pkl=args.network_pkl+"/disc_"+str(args.epoch)
+    else:
+        gen_pkl=args.network_pkl+"/gen"
+        dis_pkl=args.network_pkl+"/disc"
+    generator.load_state_dict(torch.load(gen_pkl))
+    discriminator.load_state_dict(torch.load(dis_pkl),strict=False)
+
     dnnlib.util.Logger(should_flush=True)
-    
-    # Init torch.distributed.
-    if args.num_gpus > 1: 
-        init_file = os.path.abspath(os.path.join(temp_dir, '.torch_distributed_init'))
-        if os.name == 'nt':
-            init_method = 'file:///' + init_file.replace('\\', '/')
-            torch.distributed.init_process_group(backend='gloo', init_method=init_method, rank=rank, world_size=args.num_gpus)
-        else:
-            init_method = f'file://{init_file}'
-            torch.distributed.init_process_group(backend='nccl', init_method=init_method, rank=rank, world_size=args.num_gpus)
-
-    # Init torch_utils.
-    sync_device = torch.device('cuda', rank) if args.num_gpus > 1 else None
-    training_stats.init_multiprocessing(rank=rank, sync_device=sync_device)
-    if rank != 0 or not args.verbose:
-        custom_ops.verbosity = 'none'
-
- 
+     
     device = torch.device('cuda', rank) 
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
+     
     G = copy.deepcopy(generator).eval().requires_grad_(False).to(device)
     D = copy.deepcopy(discriminator).eval().requires_grad_(False).to(device)
     total_result_dict=dict()
@@ -95,8 +94,8 @@ class CommaSeparatedList(click.ParamType):
 
 @click.command()
 @click.pass_context
-@click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="training_runs/00043-SNGAN_VAE-0.0-0.000-/checkpoint", required=True)
-@click.option('--epoch', help=' epoch', type=int, default=828, metavar='INT' )
+@click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="/home/barry/workspace/code/referredModels/pytorch-spectral-normalization-gan/training_runs/00076-SNGAN_VAE-0.100-0.010000-/checkpoint", required=True)
+@click.option('--epoch', help=' epoch', type=int, default=0, metavar='INT' )
 @click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full,fid50k_full_reconstruct' , show_default=True)
 @click.option('--data', help='Dataset to evaluate metrics against (directory or zip) [default: same as training data]', metavar='PATH')
 
@@ -143,7 +142,7 @@ def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_st
         ppl_wend     Perceptual path length in W at path endpoints against cropped image.
     """
     if mode!="hyper_search":
-        calc_metric(None,ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
+        calc_metric(None, network_pkl,epoch, metrics,    gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
     else:
         hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode)
 
@@ -154,11 +153,11 @@ def hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
         "lan_steps":  tune.choice([10,15,20,50]),
         "lan_step_lr":   tune.choice([0.01,0.1,0.3,0.5])
     }
-    gpus_per_trial = 0.5
-    num_samples=16
+    gpus_per_trial = 1
+    num_samples=20
     max_num_epochs=1
     metric_name= "fid50k_full"
-    cpus_per_trial=2
+    cpus_per_trial=10
 
     scheduler = ASHAScheduler(
         metric= metric_name,
@@ -170,7 +169,7 @@ def hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
         # parameter_columns=["l1", "l2", "lr", "batch_size"],
         metric_columns=[  "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"])                   
     result = tune.run(
-        partial(calc_metric ,ctx=ctx,network_pkl=network_pkl,epoch=epoch, metrics=metrics, data=data,  gpus=gpus, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr,mode=mode),
+        partial(calc_metric , network_pkl=network_pkl,epoch=epoch, metrics=metrics,    gpus=gpus, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr,mode=mode), #
         resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
         config=config,
         num_samples=num_samples,
@@ -194,45 +193,20 @@ def update_config(lan_steps,lan_step_lr,tuner_config) :
         return tuner_config["lan_steps"],tuner_config["lan_step_lr"]
     else:
         return lan_steps,lan_step_lr
-def calc_metric(tuner_config,ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
+
+ 
+def calc_metric(tuner_config,network_pkl=None,epoch=None, metrics=None,   gpus=None, verbose=None,model_type=None,lan_steps=None,lan_step_lr=None,mode=None):#  
+
     lan_steps,lan_step_lr=update_config(lan_steps,lan_step_lr,tuner_config) 
-    dnnlib.util.Logger(should_flush=True)
+ 
 
     # Validate arguments.
     args = dnnlib.EasyDict(metrics=metrics, num_gpus=gpus, network_pkl=network_pkl, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr,
-    mode=mode)
-    if not all(metric_main.is_valid_metric(metric) for metric in args.metrics):
-        ctx.fail('\n'.join(['--metrics can only contain the following values:'] + metric_main.list_valid_metrics()))
-    if not args.num_gpus >= 1:
-        ctx.fail('--gpus must be at least 1')
-
-    # Load network.
-    
-    if args.verbose:
-        print(f'Loading network from "{network_pkl}"...')
-    model_attribute=ModelAttribute[args.model_type]
-    batch_size=64
-    dataset=load_dataset()
-    args.run_dir ="testing_runs/metric"
-    _, real_images, _ = setup_snapshot_image_grid(training_set=dataset,batch_size=batch_size)
-    real_images =  torch.from_numpy(real_images).cuda()
-    generator,discriminator,vae_gan=load_model(constants.Z_dim,None,model_attribute,args.lan_step_lr,args.lan_steps,batch_size,real_images)
-    generator.load_state_dict(torch.load(network_pkl+"/gen_"+str(epoch)))
-    discriminator.load_state_dict(torch.load(network_pkl+"/disc_"+str(epoch)))
+    mode=mode,epoch=epoch)
  
-    
- 
-    
-    # Launch processes.
-    if args.verbose:
-        print('Launching processes...')
-    torch.multiprocessing.set_start_method('spawn')
-    with tempfile.TemporaryDirectory() as temp_dir:
-        if args.num_gpus == 1:
-            subprocess_fn(rank=0, args=args, temp_dir=temp_dir,generator=generator,discriminator=discriminator,vae_gan=vae_gan)
-        else:
-            torch.multiprocessing.spawn(fn=subprocess_fn, args=(args, temp_dir,generator,discriminator,vae_gan), nprocs=args.num_gpus)
-
+     
+  
+    subprocess_fn(rank=0, args=args, temp_dir=None ) 
 #----------------------------------------------------------------------------
 
 if __name__ == "__main__":
