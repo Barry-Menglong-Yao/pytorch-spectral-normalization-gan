@@ -38,8 +38,8 @@ def update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminato
         elif args.loss == 'wasserstein':
             disc_loss = -discriminator(data).mean() + discriminator(generator(z)).mean()
         else:
-            real_logic,_,_,_=discriminator(data)
-            fake_logic,_,_,_=discriminator(generator(z))
+            real_logic,_,_,_,x1,x2,x3,x4=discriminator(data)
+            fake_logic,_,_,_,x1,x2,x3,x4=discriminator(generator(z,None,None,None,None))
             disc_loss = nn.BCEWithLogitsLoss()(real_logic, Variable(torch.ones(args.batch_size, 1).cuda())) + \
                 nn.BCEWithLogitsLoss()(fake_logic, Variable(torch.zeros(args.batch_size, 1).cuda()))
         disc_loss.backward()
@@ -54,7 +54,7 @@ def update_generator(args,Z_dim,optim_disc,optim_gen,discriminator,generator):
     if args.loss == 'hinge' or args.loss == 'wasserstein':
         gen_loss = -discriminator(generator(z)).mean()
     else:
-        fake_logic,_,_,_=discriminator(generator(z))
+        fake_logic,_,_,_,x1,x2,x3,x4=discriminator(generator(z,None,None,None,None))
         gen_loss = nn.BCEWithLogitsLoss()(fake_logic, Variable(torch.ones(args.batch_size, 1).cuda()))
     gen_loss.backward()
     optim_gen.step()
@@ -217,7 +217,7 @@ def  load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_siz
         discriminator = unet_model.Discriminator(model_attribute.dgm_type.has_vae,Z_dim).cuda()
         generator = unet_model.Generator(Z_dim).cuda()
         vae_gan=unet_model.UNet(n_channels=3, n_classes=1, bilinear=True).cuda()
-    else:
+    elif model_type=="SNGAN_VAE" or  model_type=="SNGAN":
         discriminator = model.Discriminator(model_attribute.dgm_type.has_vae,Z_dim).cuda()
         generator = model.Generator(Z_dim).cuda()
          
@@ -230,4 +230,12 @@ def  load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_siz
             vae_gan=model.VaeGan(discriminator,generator,morphing) 
         else:
             vae_gan=model.Gan(discriminator,generator,morphing) 
+    else:
+        G_kwargs = dict(class_name=model_attribute.g_model_name,z_dim=Z_dim ,inject_type=model_attribute.inject_type,inject_layer_list=model_attribute.inject_layer_list)
+        D_kwargs = dict( class_name=model_attribute.d_model_name,has_vae =model_attribute.dgm_type.has_vae, z_dim=Z_dim )
+        vae_kwargs = dict( class_name=model_attribute.model_name  )
+        generator = dnnlib.util.construct_class_by_name(**G_kwargs ) 
+        discriminator = dnnlib.util.construct_class_by_name(**D_kwargs ) 
+        vae_gan = dnnlib.util.construct_class_by_name(discriminator,generator,morphing=None,**vae_kwargs ) 
+        
     return generator,discriminator,vae_gan

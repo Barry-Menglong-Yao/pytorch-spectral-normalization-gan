@@ -31,7 +31,7 @@ def save_image_grid(img, fname, drange, grid_size):
         PIL.Image.fromarray(img, 'RGB').save(fname)
         
 def save_image( G,grid_z, run_dir,epoch,grid_size,real_images,D,model_attribute,vae_gan):
-    images = G(grid_z).cpu().data.numpy()[:64]
+    images = G(grid_z,None,None,None,None).cpu().data.numpy()[:64]
     save_image_grid(images, os.path.join(run_dir, f'img/fakes{epoch:06d}.png'), drange=[-1,1], grid_size=grid_size)
     if model_attribute.dgm_type.has_vae:
         grid_reconstructed_images=reconstruct_grid(real_images,G,D,vae_gan )

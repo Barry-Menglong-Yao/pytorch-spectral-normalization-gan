@@ -327,8 +327,9 @@ def reconstruct(images ,   G,D,real_c,vae_gan,device=None, G_kwargs=None   ):
     if device!=None:
         images=images.to( device)
     processed_iamges=(images.to(torch.float32) / 127.5 - 1)
-    _,generated_z ,_,_ =  D(processed_iamges  )
-    reconstructed_img =  vae_gan.sample(generated_z)
+    reconstructed_img,_,_=vae_gan(processed_iamges,None) 
+    # _,generated_z ,_,_,_,_,_,_ =  D(processed_iamges  )
+    # reconstructed_img =  vae_gan.sample(generated_z)
     reconstructed_img = (reconstructed_img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
     return reconstructed_img
 

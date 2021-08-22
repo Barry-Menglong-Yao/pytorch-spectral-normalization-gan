@@ -32,9 +32,11 @@ def train_vae():
     parser.add_argument('--resume',  
                         default="y")
     parser.add_argument('--evaluate_interval',  type=int,
-                        default=1) #5
+                        default=15) #5
     parser.add_argument('--fine_tune_module',  
-                        default="d_and_e")   #e, g_d_e                 
+                        default="d_and_e")   #e, g_d_e        
+    parser.add_argument('--model_type',  
+                    default="SNGAN_VAE")         
 
     args = parser.parse_args()
     with open(args.filename, 'r') as file:
@@ -78,7 +80,7 @@ def train_vae():
 
 def load_vae_model(args,config):
     if config['model_params']['name']=="VaeGan":
-        model_attribute=ModelAttribute["SNGAN_VAE"]
+        model_attribute=ModelAttribute[args.model_type]
         
         generator,discriminator,model = load_model(config['model_params']['latent_dim'],"dcgan",model_attribute,0,0,config['exp_params']['batch_size'],None )
         if args.resume=="y":
@@ -88,7 +90,7 @@ def load_vae_model(args,config):
             else:
                 gen_pkl=args.network_pkl+"/gen"
                 dis_pkl=args.network_pkl+"/disc"
-            generator.load_state_dict(torch.load(gen_pkl))
+            generator.load_state_dict(torch.load(gen_pkl),strict=False)
             discriminator.load_state_dict(torch.load(dis_pkl),strict=False)
             if args.fine_tune_module=="d_and_e":
                 generator.requires_grad_(False)
