@@ -70,46 +70,73 @@ class UnetGenerator(nn.Module):
             nn.Tanh())
         self.inject_type=inject_type
         self.inject_layer_list=inject_layer_list
+        self.drop_out1=nn.Dropout(p=0.3)
+        self.drop_out2=nn.Dropout(p=0.3)
+        self.drop_out3=nn.Dropout(p=0.3)
+        self.drop_out4=nn.Dropout(p=0.3)
         if inject_type=="fc":
             if "1" in self.inject_layer_list:
-                self.fc1=nn.Sequential(nn.Linear(512*4*4 , 512*4*4), nn.ReLU()) 
+                self.inject_layer1=nn.Sequential(nn.Linear(512*4*4 , 512*4*4), nn.ReLU()) 
             if "2" in self.inject_layer_list:
-                self.fc2=nn.Sequential(nn.Linear(256*8*8 , 256*8*8), nn.ReLU()) 
+                self.inject_layer2=nn.Sequential(nn.Linear(256*8*8 , 256*8*8), nn.ReLU()) 
             if "3" in self.inject_layer_list:
-                self.fc3=nn.Sequential(nn.Linear(128*16*16 , 128*16*16), nn.ReLU()) 
+                self.inject_layer3=nn.Sequential(nn.Linear(128*16*16 , 128*16*16), nn.ReLU()) 
             if "4" in self.inject_layer_list:
-                self.fc4=nn.Sequential(nn.Linear(64*32*32 , 64*32*32), nn.ReLU()) 
+                self.inject_layer4=nn.Sequential(nn.Linear(64*32*32 , 64*32*32), nn.ReLU()) 
+        
         elif inject_type=="conv":
-            self.conv1=nn.Sequential(
+            self.inject_layer1=nn.Sequential(
+            nn.Conv2d(512, 512,   3,   padding=(1,1)  ),
+            
+            nn.ReLU())
+            self.inject_layer2=nn.Sequential(
+            nn.Conv2d(256, 256, 3,   padding=(1,1)),
+            
+            nn.ReLU()) 
+            self.inject_layer3=nn.Sequential(
+            nn.Conv2d(128, 128,  3,   padding=(1,1)),
+            
+            nn.ReLU()) 
+            self.inject_layer4=nn.Sequential(
+            nn.Conv2d(64, 64,  3,   padding=(1,1)),
+            
+            nn.ReLU()) 
+        elif inject_type=="conv_broadcast":
+            self.inject_layer1=nn.Sequential(
             nn.Conv2d(512, 512, 4  ),
             
             nn.ReLU())
-            self.conv2=nn.Sequential(
+            self.inject_layer2=nn.Sequential(
             nn.Conv2d(256, 256, 8),
             
             nn.ReLU()) 
-            self.conv3=nn.Sequential(
+            self.inject_layer3=nn.Sequential(
             nn.Conv2d(128, 128, 16),
             
             nn.ReLU()) 
-            self.conv4=nn.Sequential(
+            self.inject_layer4=nn.Sequential(
             nn.Conv2d(64, 64, 32),
             
             nn.ReLU()) 
+        elif inject_type=="pool":
+            self.inject_layer1= nn.AvgPool2d(kernel_size = 4   )
+            self.inject_layer2= nn.AvgPool2d(kernel_size = 8 )
+            self.inject_layer3= nn.AvgPool2d(kernel_size = 16 )
+            self.inject_layer4= nn.AvgPool2d(kernel_size = 32 )
         else:
-            self.cat_conv1=nn.Sequential(
+            self.inject_layer1=nn.Sequential(
             nn.Conv2d(1024, 512, 3, stride=1, padding=(1,1)),
             
             nn.ReLU())
-            self.cat_conv2=nn.Sequential(
+            self.inject_layer2=nn.Sequential(
             nn.Conv2d(512, 256, 3, stride=1, padding=(1,1)),
             
             nn.ReLU()) 
-            self.cat_conv3=nn.Sequential(
+            self.inject_layer3=nn.Sequential(
             nn.Conv2d(256, 128, 3, stride=1, padding=(1,1)),
             
             nn.ReLU()) 
-            self.cat_conv4=nn.Sequential(
+            self.inject_layer4=nn.Sequential(
             nn.Conv2d(128, 64, 3, stride=1, padding=(1,1)),
             
             nn.ReLU()) 
@@ -118,22 +145,26 @@ class UnetGenerator(nn.Module):
         z=z.view(-1, self.z_dim, 1, 1)
         up1=self.conv_norm1(z)#128,1,1->64,512,4,4
         if x4!=None and "1" in self.inject_layer_list:
+            x4=self.drop_out1(x4)
             up1=self.inject(up1,x4, self.inject_type,"1")
         
         up2=self.conv_norm2(up1)#512,4,4->256,8,8
         if x3!=None and "2" in self.inject_layer_list:
+            x3=self.drop_out2(x3)
             up2=self.inject(up2,x3, self.inject_type,"2")
         up3=self.conv_norm3(up2)#256,8,8->128,16,16
         if x2!=None and "3" in self.inject_layer_list:
+            x2=self.drop_out3(x2)
             up3=self.inject(up3,x2, self.inject_type,"3")
         up4=self.conv_norm4(up3)#128,16,16->64,32,32
         if x1!=None and "4" in self.inject_layer_list:
+            x1=self.drop_out4(x1)
             up4=self.inject(up4,x1, self.inject_type,"4")
         up5=self.conv5(up4)
         return up5
     def inject(self,up,x,inject_type,inject_phase):
         inject_func=self.get_inject_func(inject_type,inject_phase)
-        if inject_type=="conv":
+        if inject_type=="conv" or inject_type=="conv_broadcast" or   inject_type=="pool": 
             inject_x=inject_func(x)
             up1=up+inject_x
         elif inject_type=="fc":
@@ -149,33 +180,15 @@ class UnetGenerator(nn.Module):
         return up1
 
     def get_inject_func(self,inject_type,inject_phase):
-        if inject_type=="fc":
-            if inject_phase=="1":
-                return self.fc1
-            elif inject_phase=="2":
-                return self.fc2
-            elif inject_phase=="3":
-                return self.fc3 
-            else: 
-                return self.fc4
-        elif inject_type=="conv":
-            if inject_phase=="1":
-                return self.conv1
-            elif inject_phase=="2":
-                return self.conv2
-            elif inject_phase=="3":
-                return self.conv3 
-            else: 
-                return self.conv4
-        else:
-            if inject_phase=="1":
-                return self.cat_conv1
-            elif inject_phase=="2":
-                return self.cat_conv2
-            elif inject_phase=="3":
-                return self.cat_conv3 
-            else: 
-                return self.cat_conv4    
+        if inject_phase=="1":
+            return self.inject_layer1
+        elif inject_phase=="2":
+            return self.inject_layer2
+        elif inject_phase=="3":
+            return self.inject_layer3 
+        else: 
+            return self.inject_layer4
+         
 
 class Discriminator(nn.Module):
     def __init__(self,has_vae,z_dim):
