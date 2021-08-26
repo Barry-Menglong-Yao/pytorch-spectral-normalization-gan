@@ -14,7 +14,8 @@ class ModelAttribute(Enum):
     SNGAN = (DgmType.GAN,  "training.model.sngan.GeneratorImpl","training.model.sngan.DiscriminatorImpl",128,"training.model.sngan.VaeGanImpl",5," ",None)
     SNGAN_VAE= (DgmType.GAN_VAE,  "training.model.sngan.GeneratorImpl","training.model.sngan.DiscriminatorImpl",128,"training.model.sngan.VaeGanImpl",5," ",None)
     UNet= (DgmType.GAN_VAE,  "training.model.sngan.GeneratorImpl","training.model.sngan.DiscriminatorImpl",128,"training.model.sngan.VaeGanImpl",5," ",None)
-    UNet_SNGAN_VAE= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"conv",["1","2","3","4"])
+    
+    UNet_SNGAN_VAE_conv= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"conv",["1","2","3","4"])
     UNet_SNGAN_VAE_fc= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"fc",["1","4"])
     UNet_SNGAN_VAE_cat= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"cat",["1"])
     UNet_SNGAN_VAE_broadcast= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"conv_broadcast",["1","2","3","4"])

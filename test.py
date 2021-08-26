@@ -29,7 +29,35 @@ def test_kernal():
         print(d_g,file=f)
         print(d_i,file=f)
 
+def test_board():
+    import torch
+    import torchvision
+    from torch.utils.tensorboard import SummaryWriter
+    from torchvision import datasets, transforms
 
+    # Writer will output to ./runs/ directory by default
+    writer = SummaryWriter()
 
-test_kernal()
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+    trainset = datasets.MNIST('../../../data/mnist_train', train=True, download=True, transform=transform)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+    model = torchvision.models.resnet50(False)
+    # Have ResNet model take in grayscale rather than RGB
+    model.conv1 = torch.nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    images, labels = next(iter(trainloader))
+
+    grid = torchvision.utils.make_grid(images)
+    writer.add_image('images', grid, 0)
+    writer.add_graph(model, images)
+
+    for i in range(10):
+        z = torch.randn([64, 16] ) 
+        z_min=(torch.min(z).item())
+        writer.add_scalar("z_min",z_min,global_step=i)
+        
+        z_max=(torch.max(z).item())
+        writer.add_scalar("z_max",z_max,global_step=i)
+        writer.close()
+    writer.close()
+test_board()
 

@@ -41,7 +41,7 @@ def subprocess_fn(rank, args, temp_dir ):
     args.run_dir ="testing_runs/metric"
     _, real_images, _ = setup_snapshot_image_grid(training_set=dataset,batch_size=batch_size)
     real_images =  torch.from_numpy(real_images).cuda()
-    generator,discriminator,vae_gan=load_model(constants.Z_dim,None,model_attribute,args.lan_step_lr,args.lan_steps,batch_size,real_images)
+    generator,discriminator,vae_gan=load_model(constants.Z_dim,args.model_type,model_attribute,args.lan_step_lr,args.lan_steps,batch_size,real_images)
     if args.epoch>=0:
         gen_pkl=args.network_pkl+"/gen_"+str(args.epoch)
         dis_pkl=args.network_pkl+"/disc_"+str(args.epoch)
@@ -95,7 +95,7 @@ class CommaSeparatedList(click.ParamType):
 @click.command()
 @click.pass_context
 @click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="/home/barry/workspace/code/referredModels/pytorch-spectral-normalization-gan/training_runs/00076-SNGAN_VAE-0.100-0.010000-/checkpoint", required=True)
-@click.option('--epoch', help=' epoch', type=int, default=0, metavar='INT' )
+@click.option('--epoch', help=' epoch', type=int, default=-1, metavar='INT' )
 @click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full,fid50k_full_reconstruct' , show_default=True)
 @click.option('--data', help='Dataset to evaluate metrics against (directory or zip) [default: same as training data]', metavar='PATH')
 
@@ -103,8 +103,8 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--verbose', help='Print optional information', type=bool, default=True, metavar='BOOL', show_default=True)
 @click.option('--model_type', help=' ',default='SNGAN_VAE', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
 
-@click.option('--lan_steps', help=' epoch', type=int, default=0, metavar='INT' )
-@click.option('--lan_step_lr', help='lan_step_lr', type=float, default=0 )
+@click.option('--lan_steps', help=' epoch', type=int, default=10, metavar='INT' )
+@click.option('--lan_step_lr', help='lan_step_lr', type=float, default=0.1 )
 @click.option('--mode', help=' ',default='test', type=click.Choice(['test','hyper_search' ]))
 def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
     """Calculate quality metrics for previous training run or pretrained network pickle.

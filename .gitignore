@@ -107,4 +107,4 @@ testing_runs/**
 checkpoints/**
 .vscode/launch.json
 fine_tune_vae/logs/**
- 
+runs/**

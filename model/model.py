@@ -309,9 +309,9 @@ class Gan( nn.Module):
     def sample(self,z):
         if self.morphing.lan_steps > 0:
             morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator  )
-            generated_img=self.generator(morphed_z)
+            generated_img=self.generator(morphed_z,None,None,None,None)
         else:
-            generated_img=self.generator(z)
+            generated_img=self.generator(z,None,None,None,None)
         return generated_img
 
  
