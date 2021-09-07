@@ -12,11 +12,11 @@ class Morphing(nn.Module):
     def forward(self    ):
         pass
     #langevin
-    def morph_z(self, z,  generator, discriminator ):
+    def morph_z(self, z,  generator, discriminator,real_images ):
         if not z.requires_grad:
             z.requires_grad = True
         self.z=z
-       
+        self.images=real_images
          
     
 
@@ -30,7 +30,7 @@ class Morphing(nn.Module):
         for i in range(self.lan_steps):
             
             self.sample_one_step(kernel,d_i,step_lr,noise_std,generator, discriminator, self.batch_size,  self.z_dim, i)
-        self.log_z_one_data(self.z_l)
+        # self.log_z_one_data(self.z_l)
         # history.draw_z(  )
         return self.z_l
             # self.G_lan = generator(self.z_l, self.batch_size, update_collection=update_collection)
@@ -47,9 +47,10 @@ class Morphing(nn.Module):
         _, kxy, _, _, = kernel(d_g, d_i)
         _, kxx, _, _, = kernel(d_g, d_g.detach())
         # KL divergence
-        energy = -torch.log(torch.mean(kxy, axis=-1) + 1e-10) + torch.log(
-            torch.mean(delete_diag(kxx), axis=-1) / (batch_size- 1) + 1e-10)
-    
+        # energy = -torch.log(torch.mean(kxy, axis=-1) + 1e-10) + torch.log(
+        #     torch.mean(delete_diag(kxx), axis=-1) / (batch_size- 1) + 1e-10)
+        energy=-d_g
+        energy=torch.squeeze(energy)
             
         z_grad = torch.autograd.grad(energy, self.z_l,grad_outputs=torch.ones(self.z_l.shape[0]).cuda())[0]
   
@@ -58,7 +59,7 @@ class Morphing(nn.Module):
         # z_grad=self.z_l.grad
         z_update=step_lr * z_grad
          
-        self.log_z_one_step( self.z_l,z_grad,z_update)
+        # self.log_z_one_step( self.z_l,z_grad,z_update)
         self.z_l = self.z_l - z_update
         self.z_l += torch.normal( mean=0., std=noise_std,size=( batch_size,  z_dim)).cuda()
       

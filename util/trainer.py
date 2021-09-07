@@ -150,16 +150,16 @@ batch_size,vae,optim_vae,scheduler_vae,vae_alpha,vae_beta):
             continue
         data = (data.cuda().to(torch.float32) / 127.5 - 1) 
         target =  Variable(target.cuda())
-        #TODO gan first
+        
+        disc_loss=update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data)
+        gen_loss=update_generator(args,Z_dim,optim_disc,optim_gen,discriminator,generator)
+      
         if model_attribute.dgm_type.has_vae:
             vae_loss,recons_loss,kld_loss=update_vae( data,target,vae,optim_vae,batch_size,vae_alpha,vae_beta)
         else:
             vae_loss=0
             recons_loss=0
             kld_loss=0
-        disc_loss=update_discriminator(disc_iters,args,Z_dim,optim_disc,optim_gen,discriminator,generator,data)
-        gen_loss=update_generator(args,Z_dim,optim_disc,optim_gen,discriminator,generator)
-
         if batch_idx % 100 == 0:
             tick_end_time = time.time()
             print(f"epoch:{epoch}, disc loss : {  disc_loss.item()}, gen loss: {  gen_loss.item()}, vae_loss:{vae_loss}, recons_loss:{recons_loss}, kld_loss:{kld_loss}, time {dnnlib.util.format_time(  tick_end_time - start_time):<12s} ") 
@@ -231,7 +231,7 @@ def  load_model(Z_dim,model_type,model_attribute,lan_step_lr,lan_steps,batch_siz
         else:
             vae_gan=model.Gan(discriminator,generator,morphing) 
     else:
-        G_kwargs = dict(class_name=model_attribute.g_model_name,z_dim=Z_dim ,inject_type=model_attribute.inject_type,inject_layer_list=model_attribute.inject_layer_list)
+        G_kwargs = dict(class_name=model_attribute.g_model_name,z_dim=Z_dim ,inject_type=model_attribute.inject_type,inject_layer_list=model_attribute.inject_layer_list,is_drop_out=model_attribute.is_drop_out)
         D_kwargs = dict( class_name=model_attribute.d_model_name,has_vae =model_attribute.dgm_type.has_vae, z_dim=Z_dim )
         vae_kwargs = dict( class_name=model_attribute.model_name  )
         generator = dnnlib.util.construct_class_by_name(**G_kwargs ) 

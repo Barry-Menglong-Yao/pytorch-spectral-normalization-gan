@@ -94,16 +94,19 @@ class CommaSeparatedList(click.ParamType):
 
 @click.command()
 @click.pass_context
-@click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="/home/barry/workspace/code/referredModels/pytorch-spectral-normalization-gan/training_runs/00076-SNGAN_VAE-0.100-0.010000-/checkpoint", required=True)
+# @click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="/home/barry/workspace/code/referredModels/pytorch-spectral-normalization-gan/training_runs/00043-SNGAN_VAE-0.0-0.000-/checkpoint", required=True)
+# # @click.option('--epoch', help=' epoch', type=int, default=828, metavar='INT' )
+# @click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full,fid50k_full_reconstruct' , show_default=True)#,fid50k_full_reconstruct
+# @click.option('--model_type', help=' ',default='SNGAN_VAE', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
+@click.option('network_pkl', '--network', help='Network pickle filename or URL', metavar='PATH',default="/home/barry/workspace/code/referredModels/pytorch-spectral-normalization-gan/training_runs/00079-SNGAN-0.100-0.100000-/checkpoint", required=True)
 @click.option('--epoch', help=' epoch', type=int, default=-1, metavar='INT' )
-@click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full,fid50k_full_reconstruct' , show_default=True)
-@click.option('--data', help='Dataset to evaluate metrics against (directory or zip) [default: same as training data]', metavar='PATH')
+@click.option('--metrics', help='Comma-separated list or "none"', type=CommaSeparatedList(), default='fid50k_full' , show_default=True)#,fid50k_full_reconstruct
+@click.option('--model_type', help=' ',default='SNGAN', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
 
+@click.option('--data', help='Dataset to evasluate metrics against (directory or zip) [default: same as training data]', metavar='PATH')
 @click.option('--gpus', help='Number of GPUs to use', type=int, default=1, metavar='INT', show_default=True)
 @click.option('--verbose', help='Print optional information', type=bool, default=True, metavar='BOOL', show_default=True)
-@click.option('--model_type', help=' ',default='SNGAN_VAE', type=click.Choice(['SNGAN','SNGAN_VAE' ]))
-
-@click.option('--lan_steps', help=' epoch', type=int, default=10, metavar='INT' )
+@click.option('--lan_steps', help=' epoch', type=int, default=1, metavar='INT' )
 @click.option('--lan_step_lr', help='lan_step_lr', type=float, default=0.1 )
 @click.option('--mode', help=' ',default='test', type=click.Choice(['test','hyper_search' ]))
 def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
@@ -150,14 +153,14 @@ def main(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_st
 
 def hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_type,lan_steps,lan_step_lr,mode):
     config = {
-        "lan_steps":  tune.choice([10,15,20,50]),
-        "lan_step_lr":   tune.choice([0.01,0.1,0.3,0.5])
+        "lan_steps":  tune.choice([10,15,20,50,100]),#10,15,20,50,100
+        "lan_step_lr":tune.choice([0.01,0.1,0.3,0.5,0.6,0.7]) #  tune.loguniform(1e-2, 1)#  tune.choice([0.00001,0.0001,0.001 ])
     }
     gpus_per_trial = 1
-    num_samples=20
+    num_samples=30
     max_num_epochs=1
     metric_name= "fid50k_full"
-    cpus_per_trial=10
+    cpus_per_trial=8
 
     scheduler = ASHAScheduler(
         metric= metric_name,
@@ -167,7 +170,7 @@ def hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
         reduction_factor=2)         
     reporter = CLIReporter(
         # parameter_columns=["l1", "l2", "lr", "batch_size"],
-        metric_columns=[  "fid50k_full" , "fid50k_full_reconstruct", "training_iteration"])                   
+        metric_columns=[  "fid50k_full" , "training_iteration"],max_progress_rows=num_samples)                   # "fid50k_full_reconstruct",
     result = tune.run(
         partial(calc_metric , network_pkl=network_pkl,epoch=epoch, metrics=metrics,    gpus=gpus, verbose=verbose,model_type=model_type,lan_steps=lan_steps,lan_step_lr=lan_step_lr,mode=mode), #
         resources_per_trial={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
@@ -182,8 +185,8 @@ def hyper_search(ctx, network_pkl,epoch, metrics, data,  gpus, verbose,model_typ
     print("Best trial config: {}".format(best_trial.config))
     print("Best trial final generation fid: {}".format(
         best_trial.last_result[ "fid50k_full"]))
-    print("Best trial final reconstrction fid: {}".format(
-        best_trial.last_result["fid50k_full_reconstruct"]))
+    # print("Best trial final reconstrction fid: {}".format(
+    #     best_trial.last_result["fid50k_full_reconstruct"]))
  
 
 

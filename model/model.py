@@ -25,6 +25,33 @@ class ConvNorm(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+# class Generator(nn.Module):
+#     def __init__(self, z_dim):
+#         super(Generator, self).__init__()
+#         self.z_dim = z_dim
+    
+#         self.model = nn.Sequential(
+#             nn.ConvTranspose2d(z_dim, 512, 4, stride=1),
+#             nn.BatchNorm2d(512),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(512, 256, 4, stride=2, padding=(1,1)),
+#             nn.BatchNorm2d(256),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(256, 128, 4, stride=2, padding=(1,1)),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(128, 64, 4, stride=2, padding=(1,1)),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(64, channels, 3, stride=1, padding=(1,1)),
+#             nn.Tanh())
+ 
+
+#     def forward(self, z,x1,x2,x3,x4):
+#         return self.model(z.view(-1, self.z_dim, 1, 1))
+
+
+
 class Generator(nn.Module):
     def __init__(self, z_dim):
         super(Generator, self).__init__()
@@ -54,7 +81,7 @@ class Generator(nn.Module):
         return up5
 
 class UnetGenerator(nn.Module):
-    def __init__(self, z_dim,inject_type,inject_layer_list):
+    def __init__(self, z_dim,inject_type,inject_layer_list,is_drop_out):
         super(UnetGenerator, self).__init__()
         self.z_dim = z_dim
     
@@ -74,6 +101,11 @@ class UnetGenerator(nn.Module):
         self.drop_out2=nn.Dropout(p=0.3)
         self.drop_out3=nn.Dropout(p=0.3)
         self.drop_out4=nn.Dropout(p=0.3)
+        self.is_drop_out=is_drop_out
+        self.norm1=None 
+        self.norm2=None
+        self.norm3=None 
+        self.norm4=None
         if inject_type=="fc":
             if "1" in self.inject_layer_list:
                 self.inject_layer1=nn.Sequential(nn.Linear(512*4*4 , 512*4*4), nn.ReLU()) 
@@ -123,7 +155,7 @@ class UnetGenerator(nn.Module):
             self.inject_layer2= nn.AvgPool2d(kernel_size = 8 )
             self.inject_layer3= nn.AvgPool2d(kernel_size = 16 )
             self.inject_layer4= nn.AvgPool2d(kernel_size = 32 )
-        else:
+        elif inject_type=="cat":
             self.inject_layer1=nn.Sequential(
             nn.Conv2d(1024, 512, 3, stride=1, padding=(1,1)),
             
@@ -140,29 +172,98 @@ class UnetGenerator(nn.Module):
             nn.Conv2d(128, 64, 3, stride=1, padding=(1,1)),
             
             nn.ReLU()) 
+        elif inject_type=="layer":
+            self.inject_layer1=nn.Sequential(
+            nn.Conv2d(512, 512, 4  ),
+            
+            nn.ReLU())
+            self.inject_layer2=nn.Sequential(
+            nn.Conv2d(256, 256, 8),
+            
+            nn.ReLU()) 
+            self.inject_layer3=nn.Sequential(
+            nn.Conv2d(128, 128, 16),
+            
+            nn.ReLU()) 
+            self.inject_layer4=nn.Sequential(
+            nn.Conv2d(64, 64, 32),
+            
+            nn.ReLU())
+            self.norm1=nn.LayerNorm([512,1,1])
+            self.norm2=nn.LayerNorm([256,1,1]) 
+            self.norm3=nn.LayerNorm([128,1,1]) 
+            self.norm4=nn.LayerNorm([64,1,1]) 
+        elif inject_type=="group":
+            self.inject_layer1=nn.Sequential(
+            nn.Conv2d(512, 512, 4  ),
+            
+            nn.ReLU())
+            self.inject_layer2=nn.Sequential(
+            nn.Conv2d(256, 256, 8),
+            
+            nn.ReLU()) 
+            self.inject_layer3=nn.Sequential(
+            nn.Conv2d(128, 128, 16),
+            
+            nn.ReLU()) 
+            self.inject_layer4=nn.Sequential(
+            nn.Conv2d(64, 64, 32),
+            
+            nn.ReLU())
+            self.norm1=nn.GroupNorm(32,512)
+            self.norm2=nn.GroupNorm(16,256)
+            self.norm3=nn.GroupNorm(8,128)
+            self.norm4=nn.GroupNorm(4,64)
+        elif inject_type=="layer_in_y":
+            self.inject_layer1=nn.Sequential(
+            nn.Conv2d(512, 512, 4  ),
+            
+            nn.ReLU())
+            self.inject_layer2=nn.Sequential(
+            nn.Conv2d(256, 256, 8),
+            
+            nn.ReLU()) 
+            self.inject_layer3=nn.Sequential(
+            nn.Conv2d(128, 128, 16),
+            
+            nn.ReLU()) 
+            self.inject_layer4=nn.Sequential(
+            nn.Conv2d(64, 64, 32),
+            
+            nn.ReLU())
+            self.norm1=nn.LayerNorm([512,4,4])
+            self.norm2=nn.LayerNorm([256,8,8]) 
+            self.norm3=nn.LayerNorm([128,16,16]) 
+            self.norm4=nn.LayerNorm([64,32,32]) 
+        else:
+            print("wrong inject_type")
 
     def forward(self, z,x1,x2,x3,x4):
         z=z.view(-1, self.z_dim, 1, 1)
         up1=self.conv_norm1(z)#128,1,1->64,512,4,4
         if x4!=None and "1" in self.inject_layer_list:
-            x4=self.drop_out1(x4)
-            up1=self.inject(up1,x4, self.inject_type,"1")
+            if self.is_drop_out:
+                x4=self.drop_out1(x4)
+            up1=self.inject(up1,x4, self.inject_type,"1",self.norm1)
         
         up2=self.conv_norm2(up1)#512,4,4->256,8,8
         if x3!=None and "2" in self.inject_layer_list:
-            x3=self.drop_out2(x3)
-            up2=self.inject(up2,x3, self.inject_type,"2")
+            if self.is_drop_out:
+                x3=self.drop_out2(x3)
+            up2=self.inject(up2,x3, self.inject_type,"2",self.norm2)
         up3=self.conv_norm3(up2)#256,8,8->128,16,16
         if x2!=None and "3" in self.inject_layer_list:
-            x2=self.drop_out3(x2)
-            up3=self.inject(up3,x2, self.inject_type,"3")
+            if self.is_drop_out:
+                x2=self.drop_out3(x2)
+            up3=self.inject(up3,x2, self.inject_type,"3",self.norm3)
         up4=self.conv_norm4(up3)#128,16,16->64,32,32
         if x1!=None and "4" in self.inject_layer_list:
-            x1=self.drop_out4(x1)
-            up4=self.inject(up4,x1, self.inject_type,"4")
+            if self.is_drop_out:
+                x1=self.drop_out4(x1)
+            up4=self.inject(up4,x1, self.inject_type,"4",self.norm4)
         up5=self.conv5(up4)
         return up5
-    def inject(self,up,x,inject_type,inject_phase):
+    def inject(self,up,x,inject_type,inject_phase,norm_func):
         inject_func=self.get_inject_func(inject_type,inject_phase)
         if inject_type=="conv" or inject_type=="conv_broadcast" or   inject_type=="pool": 
             inject_x=inject_func(x)
@@ -173,9 +274,20 @@ class UnetGenerator(nn.Module):
             inject_x=inject_func(x)
             inject_x=inject_x.view(b,c,w,h)
             up1=up+inject_x
-        else:
-            cat_x = torch.cat([x, up], dim=1)
+        elif inject_type=="cat":
+            cat_x = torch.cat([x, up], dim=1) 
             up1=inject_func(cat_x)
+        elif inject_type=="layer" or inject_type=="group":
+            inject_x=inject_func(x)
+            inject_x=norm_func(inject_x)
+            up1=up+inject_x
+        elif inject_type=="layer_in_y" or inject_type=="group_in_y":
+            inject_x=inject_func(x)
+            up1=up+inject_x
+            up1=norm_func(up1)
+        else:
+            print("wrong inject_type")
+             
         
         return up1
 
@@ -266,16 +378,16 @@ class VaeGan( nn.Module):
     def forward(self, real_img, real_c , **kwargs  ):
         real_logits,gen_z_of_real_img ,mu,log_var,x1,x2,x3,x4 = self.discriminator(real_img  )
         if self.lan_steps > 0:
-            morphed_z=self.morphing.morph_z(gen_z_of_real_img,self.generator, self.discriminator )
+            morphed_z=self.morphing.morph_z(gen_z_of_real_img,self.generator, self.discriminator,real_img )
             reconstructed_img=self.generator(morphed_z,x1,x2,x3,x4)
         else:
             reconstructed_img=self.generator(gen_z_of_real_img,x1,x2,x3,x4)
        
         return  reconstructed_img,mu,log_var
 
-    def sample(self,z):
+    def sample(self,z,real_images):
         if self.lan_steps > 0:
-            morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator )
+            morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator,real_images )
             generated_img=self.generator(morphed_z,None,None,None,None)
         else:
             generated_img=self.generator(z,None,None,None,None)
@@ -306,9 +418,9 @@ class Gan( nn.Module):
         self.morphing=morphing
     
 
-    def sample(self,z):
+    def sample(self,z,real_images):
         if self.morphing.lan_steps > 0:
-            morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator  )
+            morphed_z=self.morphing.morph_z(z,self.generator, self.discriminator,real_images  )
             generated_img=self.generator(morphed_z,None,None,None,None)
         else:
             generated_img=self.generator(z,None,None,None,None)

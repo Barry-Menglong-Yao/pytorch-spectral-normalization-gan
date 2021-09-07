@@ -238,6 +238,9 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
     if batch_gen is None:
         batch_gen = min(batch_size, 4)
     assert batch_size % batch_gen == 0
+    dataset = load_dataset()
+
+    data_loader_kwargs = dict(pin_memory=True, num_workers=1, prefetch_factor=2)
  
     # Setup generator and load labels.
     G = copy.deepcopy(opts.G).eval().requires_grad_(False).to(opts.device)
@@ -245,8 +248,8 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
     # dataset = load_dataset()
 
     # Image generation func.
-    def run_generator(z, c):
-        img = opts.vae_gan.sample(z)
+    def run_generator(z, c,real_images):
+        img = opts.vae_gan.sample(z,real_images)
         img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
         return img
 
@@ -262,22 +265,35 @@ def compute_feature_stats_for_generator(opts, detector_url, detector_kwargs, rel
     progress = opts.progress.sub(tag='generator features', num_items=stats.max_items, rel_lo=rel_lo, rel_hi=rel_hi)
     detector = get_feature_detector(url=detector_url, device=opts.device, num_gpus=opts.num_gpus, rank=opts.rank, verbose=progress.verbose)
 
-    # Main loop.
-    while not stats.is_full():
+    num_items = len(dataset)
+
+    item_subset = [(i * opts.num_gpus + opts.rank) % num_items for i in range((num_items - 1) // opts.num_gpus + 1)]
+    for real_images, _labels in torch.utils.data.DataLoader(dataset=dataset, sampler=item_subset, batch_size=batch_size, **data_loader_kwargs):
+ 
+        if real_images.shape[1] == 1:
+            real_images = real_images.repeat([1, 3, 1, 1])
+        
+        if real_images.shape[0] != batch_size:
+            continue
+         
+
         images = []
         # for _i in range(batch_size // batch_gen):
         z = torch.randn([batch_size, G.z_dim], device=opts.device)
         # c = [torch.zeros([batch_gen, G.c_dim] ) for _i in range(batch_gen)]
         # c = torch.from_numpy(np.stack(c)).pin_memory().to(opts.device)
         c=torch.zeros([batch_size, 0], device=opts.device)
-        images.append(run_generator(z, c))
+        real_images=real_images.to( opts.device)
+        real_images=(real_images.to(torch.float32) / 127.5 - 1)
+        images.append(run_generator(z, c,real_images))
         images = torch.cat(images)
         if images.shape[1] == 1:
             images = images.repeat([1, 3, 1, 1])
-        features = detector(images, **detector_kwargs)
+        features = detector(images , **detector_kwargs)
         stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
         progress.update(stats.num_items)
     return stats
+ 
 
 #----------------------------------------------------------------------------
 
@@ -328,8 +344,6 @@ def reconstruct(images ,   G,D,real_c,vae_gan,device=None, G_kwargs=None   ):
         images=images.to( device)
     processed_iamges=(images.to(torch.float32) / 127.5 - 1)
     reconstructed_img,_,_=vae_gan(processed_iamges,None) 
-    # _,generated_z ,_,_,_,_,_,_ =  D(processed_iamges  )
-    # reconstructed_img =  vae_gan.sample(generated_z)
     reconstructed_img = (reconstructed_img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
     return reconstructed_img
 
