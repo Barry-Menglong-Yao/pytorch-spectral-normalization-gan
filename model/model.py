@@ -193,7 +193,7 @@ class UnetGenerator(nn.Module):
             self.norm2=nn.LayerNorm([256,1,1]) 
             self.norm3=nn.LayerNorm([128,1,1]) 
             self.norm4=nn.LayerNorm([64,1,1]) 
-        elif inject_type=="group":
+        elif inject_type=="group" or inject_type=="group_in_y":
             self.inject_layer1=nn.Sequential(
             nn.Conv2d(512, 512, 4  ),
             
@@ -235,6 +235,23 @@ class UnetGenerator(nn.Module):
             self.norm2=nn.LayerNorm([256,8,8]) 
             self.norm3=nn.LayerNorm([128,16,16]) 
             self.norm4=nn.LayerNorm([64,32,32]) 
+        elif inject_type=="single_channel": 
+            self.inject_layer1=nn.Sequential(
+            nn.Conv2d(512, 1,   3,   padding=(1,1)  ),
+            
+            nn.ReLU())
+            self.inject_layer2=nn.Sequential(
+            nn.Conv2d(256, 1, 3,   padding=(1,1)),
+            
+            nn.ReLU()) 
+            self.inject_layer3=nn.Sequential(
+            nn.Conv2d(128, 1,  3,   padding=(1,1)),
+            
+            nn.ReLU()) 
+            self.inject_layer4=nn.Sequential(
+            nn.Conv2d(64, 1,  3,   padding=(1,1)),
+            
+            nn.ReLU()) 
         else:
             print("wrong inject_type")
 
@@ -265,7 +282,7 @@ class UnetGenerator(nn.Module):
         return up5
     def inject(self,up,x,inject_type,inject_phase,norm_func):
         inject_func=self.get_inject_func(inject_type,inject_phase)
-        if inject_type=="conv" or inject_type=="conv_broadcast" or   inject_type=="pool": 
+        if inject_type=="conv" or inject_type=="conv_broadcast" or   inject_type=="pool" or inject_type=="single_channel": 
             inject_x=inject_func(x)
             up1=up+inject_x
         elif inject_type=="fc":
@@ -285,6 +302,8 @@ class UnetGenerator(nn.Module):
             inject_x=inject_func(x)
             up1=up+inject_x
             up1=norm_func(up1)
+      
+
         else:
             print("wrong inject_type")
              

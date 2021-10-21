@@ -59,5 +59,29 @@ def test_board():
         writer.add_scalar("z_max",z_max,global_step=i)
         writer.close()
     writer.close()
-test_board()
+
+
+def pkl_make():
+    
+    import pickle
+
+    a = {"covid": [  "covid-19","covid florida","covid and z pack","covid arm","covid breakthrough","covid bowl","endemic","covid cases",
+     "delta","endémica","casos de COVID-19","paquete covid y z","brazo covid","avance de covid",
+    "कोविड सफलता","कोविड -19","डेल्टा" ,"कोविड के केस","मुखौटा"  ],
+    "vaccine" : [ "vaccine passport", "vaccine side effects" ,"vaccine deaths" ,"vaccine adverse","vaccine autoimmune" ,
+    "vaccine alcohol","vaccine abroad nhs","pasaporte de vacunacion", "efectos secundarios","reacción adversa","autoinmune",
+    "La inmunidad de grupo" ,
+    "दुष्प्रभाव","प्रतिकूल प्रतिक्रिया","स्व-प्रतिरक्षित","वैक्सीन पासपोर्ट","वैक्सीन से होने वाली मौतें"]}
+
+    with open('project1_keywords.pickle', 'wb') as f:
+        pickle.dump(a, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open('project1_keywords.pickle', 'rb') as f:
+        b = pickle.load(f)
+
+    print(a == b)
+     
+
+
+pkl_make()
 

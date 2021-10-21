@@ -23,6 +23,9 @@ class ModelAttribute(Enum):
     UNet_SNGAN_VAE_layer= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"layer",["1","2","3","4"],False)
     UNet_SNGAN_VAE_group= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"group",["1","2","3","4"],False)
     UNet_SNGAN_VAE_layer_in_y= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"layer_in_y",["1","2","3","4"],False)
+    UNet_SNGAN_VAE_group_in_y= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"group_in_y",["1","2","3","4"],False)
+    UNet_SNGAN_VAE_single_ch= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"single_channel",["1","2","3","4"],False)
+    UNet_SNGAN_VAE_single_ch_3= (DgmType.GAN_VAE,  "model.model.UnetGenerator","model.model.Discriminator",128,"model.model.VaeGan",5,"single_channel",["1","2","3"],False)
     def __init__(self, dgm_type, g_model_name,d_model_name,z_dim,model_name,disc_iters,inject_type,inject_layer_list,is_drop_out):
         self.dgm_type = dgm_type       # in kilograms
      
