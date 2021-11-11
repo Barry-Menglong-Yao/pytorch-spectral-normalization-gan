@@ -8,11 +8,13 @@ from torch.distributions.uniform import Uniform
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 class Morphing(nn.Module):
-   
+    #TEST
     def forward(self    ):
         pass
     #langevin
     def morph_z(self, z,  generator, discriminator,real_images ):
+        # if True:
+        #     pass
         if not z.requires_grad:
             z.requires_grad = True
         self.z=z
